@@ -1,0 +1,23 @@
+---
+- name: 创建Haproxy配置目录
+  file: 
+      path: "{{ item }}"
+      state: directory
+  with_items:
+    - /etc/haproxy/conf
+    - /etc/haproxy/ssl
+
+- name: 复制配置文件到配置目录
+  template: "src='/etc/ansible/roles/haproxy/templates/haproxy.cfg.j2' dest='/etc/haproxy/conf/haproxy.cfg' mode=0644"
+
+- name: 分发自动自签名ssl证书
+  copy: "src=/etc/ansible/{{ host_group }}/cert/rancher.pem dest=/etc/haproxy/ssl/rancher.pem"
+  when: ssl_self_signed_cert_on == 'true' and ssl_cert_path is not defined and ssl_key_path is not defined
+
+- name: 分发手动自签名ssl证书或者权威ssl证书
+  copy: " src=/etc/ansible/{{ host_group }}/cert/rancher.pem dest=/etc/haproxy/ssl/rancher.pem "
+  when: ssl_cert_path is defined and ssl_key_path is defined
+
+- name: Docker运行Haproxy容器
+  shell: 'docker run -d --name Haproxy --network host --health-cmd="curl --silent -k --fail https://127.0.0.1 || exit 1" --health-interval=5s --health-retries=6 --health-timeout=3s --restart always -v /etc/haproxy/conf/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg -v /etc/haproxy/ssl/rancher.pem:/usr/local/etc/haproxy/rancher.pem haproxy:alpine'
+

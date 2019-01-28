@@ -1,0 +1,14 @@
+---
+- name: 创建RKE工作目录
+  file: 
+    path: "/etc/ansible/cluster/{{ host_group }}/rke"
+    tate: directory
+
+- name: 刷新RKE配置文件
+  template: " src={{ item.src }} dest={{ item.dest }} "
+  with_items:
+     - {src: "/etc/ansible/roles/k8s/templates/cluster.yml.j2" , dest: "/etc/ansible/cluster/{{ host_group }}/rke/cluster.yml" }
+
+- name: RKE安装Local k8s集群
+  shell: " cd /etc/ansible/cluster/{{ host_group }}/rke; rke up --config cluster.yml "
+

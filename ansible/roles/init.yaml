@@ -1,0 +1,6 @@
+---
+# 节点初始化
+- hosts: {{ host_group }}
+  gather_facts: true
+  roles:
+  - { role: init , tags: "init" }

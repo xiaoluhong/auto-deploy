@@ -1,0 +1,22 @@
+---    
+- name: 创建cert工作目录
+  file: 
+    path: /etc/ansible/cluster/{{ host_group }}/cert/
+    state: directory
+
+- name: 自动生成自签名ssl证书
+  shell: "cd /etc/ansible/cluster/{{ host_group }}/cert/; {{ item }}"
+  with_items:
+    # 生成ssl证书文件
+    - "/etc/ansible/bin/create-cert.sh --ssl-domain={{rancher_url}} \
+      --ssl-trusted-domain={{extend_url}} --ssl-trusted-ip={{ vip_ip }} \
+      --ca-date={{ca_date}} --ssl-size={{ssl_size}} --ssl-date={{ssl_date}} --ssl-cn={{ssl_cn}} "
+    # 合并证书文件
+    - 'cat tls.crt tls.key | tee rancher.pem' 
+  when: ssl_cert_path is not defined and ssl_key_path is not defined and ssl_self_signed_cert_on == 'true'
+  tags: create_cert
+
+- name: 合并手动自签名ssl证书或者权威ssl证书
+  shell: "/etc/ansible/cluster/{{ host_group }}/cert/ ; cat {{ ssl_key_path }} {{ ssl_cert_path }}| tee rancher.pem"
+  when: ssl_cert_path is defined and ssl_key_path is defined and ssl_self_signed_cert_on == 'false'
+  

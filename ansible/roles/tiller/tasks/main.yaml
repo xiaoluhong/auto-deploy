@@ -1,0 +1,13 @@
+---
+- name: 配置Helm客户端访问权限
+  shell: " cd /etc/ansible/cluster/{{ host_group }}; kubectl --kubeconfig=./rke/kube_config_cluster.yml -n kube-system create serviceaccount tiller; kubectl --kubeconfig=./rke/kube_config_cluster.yml create clusterrolebinding tiller --clusterrole cluster-admin --serviceaccount=kube-system:tiller "
+
+- name: 创建registry secret
+  shell: " cd /etc/ansible/cluster/{{ host_group }}; {{ item }} "
+  with_items:
+    - " kubectl --kubeconfig=./rke/kube_config_cluster.yml -n kube-system create secret docker-registry regcred --docker-server={{ registry_url }} --docker-username={{ registry_username }} --docker-password={{ registry_password }} --docker-email={{ registry_email }} "
+    - ' kubectl --kubeconfig=./rkekube_config_cluster.yml -n kube-system patch serviceaccount tiller -p "{"imagePullSecrets": [{"name\": "regcred"}]}" '
+  when: private_registry_on is defined and private_registry_on == 'true'
+
+- name: 安装Helm Server(Tiller)
+  shell: " cd /etc/ansible/cluster/{{ host_group }}; helm --kubeconfig=./rke/kube_config_cluster.yml init --skip-refresh --service-account tiller --tiller-image {{ tiller_images_tag }} "

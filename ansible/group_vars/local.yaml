@@ -1,0 +1,70 @@
+###### SSL证书配置 ######
+# 1.使用自动自签名ssl证书
+## 默认将自动生成自签名证书(true或者false)，使用权威证书设置为false
+ssl_self_signed_cert_on: 'true'
+
+# 2.使用自己的自签名ssl证书，
+## 证书文件存放在根目录的cert文件夹中，取名为: tls.crt和tls.key
+## ssl_self_signed_cert_on: 'false'
+## ssl_cert_path: '/etc/ansible/cluster/local/cert/tls.crt'
+## ssl_key_path: '/etc/ansible/cluster/local/cert/tls.key'
+# 自签名证书需要指定ca路径
+## ssl_ca_path: '/etc/ansible/cluster/local/cert/cacerts.pem'
+
+# 3.使用权威ssl证书
+## 证书文件存放在根目录的cert文件夹中，取名为: tls.crt和tls.key
+## ssl_self_signed_cert_on: 'false'
+## ssl_cert_path: '/etc/ansible/cluster/local/cert/tls.crt'
+## ssl_key_path: '/etc/ansible/cluster/local/cert/tls.key'
+
+# 4.ssl自签名证书参数
+## 如果想多个域名访问，则添加扩展域名;
+extend_url: ''
+## 一般ssl证书只信任域名的访问请求，有时候需要使用ip去访问server，那么需要给ssl证书添加扩展IP，多个IP用逗号隔开；
+extend_ip: ''
+## ssl加密位数，默认2048；
+ssl_size: '2048'
+## ca有效期，默认10年；
+ca_date: '3650'
+## ssl证书有效期，默认10年；
+ssl_date: '3650'
+## 国家代码(2个字母的代号),默认CN；
+ssl_cn: 'CN'
+
+###### RKE集群相关参数 ######
+
+###### ansibled登录相关 ######
+ansible_ssh_port: '22'
+ansible_ssh_user: 'root'
+ansible_ssh_pass: '123456'
+ansible_become_pass: '123456'
+## ansible_ssh_private_key_file: /root/ansible/rke/k8s-node00.pem 
+
+###### Rancher 相关参数 ######
+
+# Rancher URL地址，如果使用Nodeport方式访问rancher，则可不设置；
+rancher_url: 'www.test.com'
+# 访问模式(url或者ip)
+access_type: 'url'
+# 负载均衡类型
+
+# 用于rancher统一的入口地址
+vip_ip: '1.1.1.1'
+
+tiller_images_tag: 'registry.cn-shanghai.aliyuncs.com/rancher/tiller:v2.13.1'
+# 镜像后不加tag
+rancherImage: 'rancher/rancher'
+rancher_version: 'v2.2.2'
+rancherRegistry: 'registry.cn-shanghai.aliyuncs.com'
+busyboxImage: 'rancher/busybox'
+NodePort_port: '30303'
+
+# 设置私有镜像仓库(true或者false),(如果是离线部署则必须配置) 
+private_registry_on: 'false'
+## 私有仓库地址不加协议头
+registry_url: ''
+registry_username: ''
+registry_password: ''
+registry_email: ''
+
+registry_mirrors: https://7bezldxe.mirror.aliyuncs.com

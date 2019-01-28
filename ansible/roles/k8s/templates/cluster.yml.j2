@@ -1,0 +1,120 @@
+nodes:
+{% set group = host_group %}
+{% for host in groups[group] %}
+{% if hostvars[host]['role'] is defined %}
+  - address: {{ host }}
+{% if hostvars[host].internal_address is defined %}
+    internal_address: {{ hostvars[host]['internal_address'] }}
+{% endif %}
+{% if hostvars[host].name is defined %}
+    hostname_override: {{ hostvars[host]['name'] }}
+{% endif %}
+    user: rancher
+{% if hostvars[host].ansible_ssh_port is defined %}
+    port: {{ hostvars[host].ansible_ssh_port }}
+{% else %}
+    port: {{ ansible_ssh_port }}
+{% endif %}
+    role: {{ role }}
+{% if hostvars[host].docker_socket is defined %}
+    docker_socket: {{ hostvars[host]['docker_socket'] }}
+{% endif %}
+{% if hostvars[host].haproxy is not defined %}
+    labels:
+      app: ingress
+{% endif %}
+{% endif %}
+{% endfor %}
+
+ignore_docker_version: {{ ignore_docker_version }}
+ssh_agent_auth: {{ ssh_agent_auth }}
+ssh_key_path: /etc/ansible/cluster/{{ host_group }}/ssh/ssh_rsa_key
+
+{% if private_registry_on == 'true' %}
+private_registries:
+  - url: {{ registry_url }}
+    user: {{ registry_username }}
+    password: {{ registry_password }}
+    is_default: true
+{% endif %}
+
+cluster_name: {{ host_group }}
+kubernetes_version: {{ kubernetes_version }}
+services:
+  etcd:
+    backup_config:
+      enabled: {{ etcd_snapshot_on }}
+      interval_hours: {{ etcd_interval_hours }}
+      retention: {{ etcd_retention }}
+    extra_args:
+      quota-backend-bytes: {{ etcd_quota_backend_bytes }}
+  kube-api:
+    service_cluster_ip_range: {{ service_cluster_ip_range }}
+    service_node_port_range: {{ service_node_port_range }}
+    always_pull_images: {{ always_pull_images }}
+    pod_security_policy: {{ pod_security_policy }}
+    extra_args:
+      audit-log-path: "-"
+      delete-collection-workers: 3
+      v: 4
+  kube-controller:
+    cluster_cidr: {{ cluster_cidr }}
+    service_cluster_ip_range: {{ service_cluster_ip_range }}
+    extra_args:
+      node-monitor-period: {{ node_monitor_period }}
+      node-monitor-grace-period: {{ node_monitor_grace_period }}
+      node-startup-grace-period: {{ node_startup_grace_period }}
+      pod-eviction-timeout: {{ pod_eviction_timeout }}
+  kubelet:
+    cluster_domain: cluster.local
+    cluster_dns_server: {{ cluster_dns_server }}
+    fail_swap_on: false
+    infra_container_image: 
+    extra_args:
+      max-pods: {{ max_pods }}
+      sync-frequency: {{ sync_frequency }}
+      max-open-files: {{ max_open_files }}
+      kube-api-burst: {{ kube_api_burst }}
+      kube-api-qps: {{ kube_api_qps }}
+      serialize-image-pulls: {{ serialize_image_pulls }}
+      registry-burst: {{ registry_burst }}
+      registry-qps: {{ registry_qps }}
+    extra_binds:
+      - "/usr/libexec/kubernetes/kubelet-plugins:/usr/libexec/kubernetes/kubelet-plugins"
+authentication:
+  strategy: "x509|webhook"
+  sans:
+    - "{{extend_ip}}"
+    - "{{extend_url}}"
+{% for host in groups[group] %}
+{% if hostvars[host]['role'] is defined %}
+    - "{{ host }}"
+{% endif %}
+{% endfor %}
+
+authorization:
+  mode: rbac
+
+addon_job_timeout: 30
+
+network:
+  plugin: {{ network_plugin }}
+ 
+ingress:
+  provider: nginx
+  node_selector:
+    app: ingress
+
+{% if dns_on == 'true' %}
+dns:
+  provider: {{ dns_provider }}
+  upstreamnameservers: {{ dns_upstream_nameservers }}
+{% else %}
+dns:
+  provider: none
+{% endif %}
+
+{% if metrics_server_on == 'false' %}
+monitoring:
+  provider: none
+{% endif %}

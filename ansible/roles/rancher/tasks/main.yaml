@@ -1,0 +1,16 @@
+---
+- name: 创建Rancher工作目录
+  file: 
+      path: " /etc/ansible/cluster/{{ host_group }}/rancher "
+      state: directory
+  tags: re_install_rancher
+  
+- name: 更新Rancher HA安装脚本
+  template: " src={{ item.src }} dest={{ item.dest }} "
+  with_items:
+    - {src: '/etc/ansible/roles/rancher/templates/install-rancher.sh.j2' , dest: " /etc/ansible/cluster/{{ host_group }}/rancher/install-rancher.sh " }
+  tags: re_install_rancher
+
+- name: 安装Rancher HA
+  shell: " cd /etc/ansible/cluster/{{ host_group }}; sudo bash ./rancher/install-rancher.sh "
+  tags: re_install_rancher

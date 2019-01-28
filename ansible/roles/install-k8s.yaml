@@ -1,0 +1,8 @@
+---
+# 配置初始化、安装local集群、安装Rancher HA
+- hosts: 127.0.0.1
+  vars_files:
+    - /etc/ansible/group_vars/{{ host_group }}.yaml
+  gather_facts: no 
+  roles:
+  - { role: k8s, tags: "k8s" }

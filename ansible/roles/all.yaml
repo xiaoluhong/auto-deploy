@@ -1,0 +1,48 @@
+---
+# 创建rke工作用户
+- hosts: 127.0.0.1
+  gather_facts: no
+  roles:
+  - { role: 'ssh' , tags: "create_ssh" }
+
+# 节点初始化
+- hosts: "{{ host_group }}"
+  gather_facts: true
+  roles:
+  - { role: 'init', tags: "init" }
+
+# 创建ssl证书
+- hosts: 127.0.0.1 
+  gather_facts: no 
+  roles:
+  - { role: 'cert', tags: "create_cert" }
+
+# 安装k8s集群
+- hosts: 127.0.0.1 
+  gather_facts: no 
+  roles:
+  - { role: 'k8s' , tags: "install_k8s" }
+
+# 安装tiller
+- hosts: 127.0.0.1 
+  gather_facts: no 
+  roles:
+  - { role: 'tiller' , tags: "install_tiller" }
+ 
+# 安装Rancher HA
+- hosts: 127.0.0.1 
+  gather_facts: no 
+  roles:
+  - { role: 'rancher', tags: "install_rancher" }
+
+# 安装Haproxy
+- hosts: "{{ host_group }}"
+  gather_facts: true
+  roles:
+  - { role: 'haproxy', tags: "install_haproxy" }
+
+# 安装Keepalived
+- hosts: "{{ host_group }}"
+  gather_facts: true
+  roles:
+  - { role: 'keepalived', tags: "install_keepalived" }

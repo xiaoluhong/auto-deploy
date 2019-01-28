@@ -1,0 +1,16 @@
+---
+- name: 创建keepalived配置目录
+  file: 
+      path: /etc/keepalived
+      state: directory
+
+- name: 初始化keepalived配置文件
+  template: "src={{ item.src }} dest={{ item.dest }} mode=0644"
+  with_items:
+     # 生成keepalived配置文件
+     - { src: '/etc/ansible/roles/keepalived/templates/keepalived.conf.j2' , dest: '/etc/keepalived/keepalived.conf' }
+     # 创建check_haproxy脚本
+     - { src: '/etc/ansible/roles/keepalived/templates/check_haproxy.sh.j2' , dest: '/etc/keepalived/check_haproxy.sh' }
+
+- name: Docker运行Keepalived容器
+  shell: "chmod +x /etc/keepalived/check_haproxy.sh ; docker run -d --name keepalived --restart=always --net=host --cap-add=NET_ADMIN registry.cn-shanghai.aliyuncs.com/rancher/keepalived "

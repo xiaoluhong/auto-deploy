@@ -1,0 +1,464 @@
+#!/bin/bash -e
+
+command_exists() {
+	command -v "$@" > /dev/null 2>&1
+}
+get_distribution() {
+	lsb_dist=""
+	if [ -r /etc/os-release ]; then
+		lsb_dist="$(. /etc/os-release && echo "$ID")"
+	fi
+	echo "$lsb_dist"
+}
+
+#检查操作系统
+check_os() {
+
+	if command_exists lsb_release; then
+ 		set +e
+		lsb_release -a -u > /dev/null 2>&1
+		lsb_release_exit_code=$?
+		set -e
+
+ 		if [ "$lsb_release_exit_code" = "0" ]; then
+ 			cat <<-EOF
+			You're using '$lsb_dist' version '$dist_version'.
+			EOF
+
+ 			lsb_dist=$(lsb_release -a -u 2>&1 | tr '[:upper:]' '[:lower:]' | grep -E 'id' | cut -d ':' -f 2 | tr -d '[:space:]')
+			dist_version=$(lsb_release -a -u 2>&1 | tr '[:upper:]' '[:lower:]' | grep -E 'codename' | cut -d ':' -f 2 | tr -d '[:space:]')
+
+ 			cat <<-EOF
+			Upstream release is '$lsb_dist' version '$dist_version'.
+			EOF
+		else
+			if [ -r /etc/debian_version ] && [ "$lsb_dist" != "ubuntu" ] && [ "$lsb_dist" != "raspbian" ]; then
+				if [ "$lsb_dist" = "osmc" ]; then
+ 					lsb_dist=raspbian
+				else
+ 					lsb_dist=debian
+				fi
+				dist_version="$(sed 's/\/.*//' /etc/debian_version | sed 's/\..*//')"
+				case "$dist_version" in
+					9)
+						dist_version="stretch"
+					;;
+					8|'Kali Linux 2')
+						dist_version="jessie"
+					;;
+				esac
+			fi
+		fi
+	fi
+}
+
+clean_docker_k8s()
+{
+    # 停止服务
+    systemctl disable kubelet.service
+    systemctl disable kube-scheduler.service
+    systemctl disable kube-proxy.service
+    systemctl disable kube-controller-manager.service
+    systemctl disable kube-apiserver.service
+    systemctl stop kubelet.service
+    systemctl stop kube-scheduler.service
+    systemctl stop kube-proxy.service
+    systemctl stop kube-controller-manager.service
+    systemctl stop kube-apiserver.service
+    
+    # 删除所有容器
+    docker rm -f $(docker ps -qa)
+    # 删除所有容器卷
+    docker volume rm $(docker volume ls -q)
+
+    # 卸载mount目录
+    for mount in $(mount | grep tmpfs | grep '/var/lib/kubelet' | awk '{ print $3 }') /var/lib/kubelet /var/lib/rancher; do umount $mount; done
+
+    # 备份K8S配置文件
+    if [ -d /etc/kubernetes/ ]; then
+        mv -f /etc/kubernetes/ /etc/kubernetes-`date +%Y%m%d%H%M`-bak/
+    fi
+    
+    # 备份ETCD数据
+    if [ -d /var/lib/etcd/ ]; then
+        mv -f /var/lib/etcd/  /var/lib/etcd-`date +%Y%m%d%H%M`-bak/
+    fi
+    
+    # 备份RKE数据
+    if [ -d /opt/rke/ ]; then
+        mv -f /opt/rke/ /opt/rke-`date +%Y%m%d%H%M`-bak/
+    fi
+    
+    # 备份Rancher数据
+    if [ -d /var/lib/rancher/ ]; then
+        mv -f /var/lib/rancher/ /var/lib/rancher-`date +%Y%m%d%H%M`-bak/
+    fi
+    
+    # 备份ceph数据
+    if [ -d /etc/ceph/ ]; then
+        mv -f /etc/ceph/ /etc/ceph-`date +%Y%m%d%H%M`-bak/
+    fi
+    
+    # 删除其他残留路径
+    rm -rf  /etc/cni \
+            /opt/cni \
+            /run/secrets/kubernetes.io \
+            /run/calico \
+            /run/flannel \
+            /var/lib/calico \
+            /var/lib/cni \
+            /var/lib/kubelet \
+            /var/log/containers \
+            /var/log/pods \
+            /var/run/calico
+    
+    # 清理网络接口
+    network_interface=`ls /sys/class/net`
+    for net_inter in $network_interface;
+    do
+      if ! echo $net_inter | grep -qiE 'lo|docker0|eth*|en*';then
+        ip link delete $net_inter
+      fi
+    done
+    
+    # 清理残留进程
+    port_list=`80 443 6443 2376 2379 2380 8472 9099 10250 10254`
+    for port in $port_list
+    do
+      pid=`netstat -atlnup|grep $port |awk '{print $7}'|awk -F '/' '{print $1}'|grep -v -|sort -rnk2|uniq`
+      if [[ -n $pid ]];then
+        kill -9 $pid
+      fi
+    done
+    pro_pid=`ps -ef |grep -v grep |grep kube|awk '{print $2}'`
+    if [[ -n $pro_pid ]];then
+      kill -9 $pro_pid
+    fi
+    
+    # 清理Iptables表
+    ## 注意：如果节点Iptables有特殊配置，以下命令请谨慎操作
+    sudo iptables --flush
+    sudo iptables --flush --table nat
+    sudo iptables --flush --table filter
+    sudo iptables --table nat --delete-chain
+    sudo iptables --table filter --delete-chain
+    
+    # 重启docker
+    systemctl restart docker
+}
+
+install_docker()
+{
+    ping -c 2 -w 3 www.baidu.com
+    if [ $? -ne 0 ]; then
+        echo '检测到环境网络异常，将退出安装';
+        exit 1;
+    fi
+
+    lsb_dist=$( get_distribution )
+	lsb_dist="$(echo "$lsb_dist" | tr '[:upper:]' '[:lower:]')"
+
+	case "$lsb_dist" in
+
+		ubuntu)
+			if command_exists lsb_release; then
+				dist_version="$(lsb_release --codename | cut -f2)"
+			fi
+			if [ -z "$dist_version" ] && [ -r /etc/lsb-release ]; then
+				dist_version="$(. /etc/lsb-release && echo "$DISTRIB_CODENAME")"
+			fi
+		;;
+
+		debian|raspbian)
+			dist_version="$(sed 's/\/.*//' /etc/debian_version | sed 's/\..*//')"
+			case "$dist_version" in
+				9)
+					dist_version="stretch"
+				;;
+				8)
+					dist_version="jessie"
+				;;
+			esac
+		;;
+
+		centos)
+			if [ -z "$dist_version" ] && [ -r /etc/os-release ]; then
+				dist_version="$(. /etc/os-release && echo "$VERSION_ID")"
+			fi
+		;;
+
+		rhel|ol|sles)
+			ee_notice "$lsb_dist"
+			exit 1
+			;;
+
+		*)
+			if command_exists lsb_release; then
+				dist_version="$(lsb_release --release | cut -f2)"
+			fi
+			if [ -z "$dist_version" ] && [ -r /etc/os-release ]; then
+				dist_version="$(. /etc/os-release && echo "$VERSION_ID")"
+			fi
+		;;
+
+	esac
+
+	check_os
+
+	# Run setup for each distro accordingly
+	case "$lsb_dist" in
+		ubuntu|debian)
+			pre_reqs="apt-transport-https ca-certificates curl software-properties-common bash-completion  gnupg-agent";
+
+			if [ "$lsb_dist" = "debian" ] && [ "$(uname -m)" = "x86_64" ]; then
+                curl -fsSL {{mirror_url}}/docker-ce/linux/debian/gpg | apt-key add -;
+                add-apt-repository "deb [arch=amd64] {{mirror_url}}/docker-ce/linux/debian $(lsb_release -cs) stable";
+
+			fi
+            if [ "$lsb_dist" = "ubuntu" ] && [ "$(uname -m)" = "x86_64" ] && [ "$dist_version" = "xenial" ] || [ "$dist_version" = "xenial" ]; then
+                curl -fsSL {{mirror_url}}/docker-ce/linux/ubuntu/gpg | apt-key add -;
+                add-apt-repository "deb [arch=amd64] {{mirror_url}}/docker-ce/linux/ubuntu $(lsb_release -cs) stable";
+
+                sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak
+                cat > /etc/apt/sources.list << EOF
+                    deb http://mirrors.aliyun.com/ubuntu/ $dist_version main
+                    deb-src http://mirrors.aliyun.com/ubuntu/ $dist_version main
+                    deb http://mirrors.aliyun.com/ubuntu/ $dist_version-updates main
+                    deb-src http://mirrors.aliyun.com/ubuntu/ $dist_version-updates main
+                    deb http://mirrors.aliyun.com/ubuntu/ $dist_version universe
+                    deb-src http://mirrors.aliyun.com/ubuntu/ $dist_version universe
+                    deb http://mirrors.aliyun.com/ubuntu/ $dist_version-updates universe
+                    deb-src http://mirrors.aliyun.com/ubuntu/ $dist_version-updates universe
+                    deb http://mirrors.aliyun.com/ubuntu/ $dist_version-security main
+                    deb-src http://mirrors.aliyun.com/ubuntu/ $dist_version-security main
+                    deb http://mirrors.aliyun.com/ubuntu/ $dist_version-security universe
+                    deb-src http://mirrors.aliyun.com/ubuntu/ $dist_version-security universe 
+EOF
+			fi
+            
+			apt-get remove docker docker-engine docker.io containerd runc -y >/dev/null;
+            apt-get update -qq >/dev/null;
+			apt-get install -y -qq $pre_reqs >/dev/null;
+            d_ver=$(apt-cache madison docker-ce|grep {{docker_version}}|awk '{print $3}') >/dev/null;
+            apt-get -y install docker-ce=${d_ver} --allow-downgrades;
+            sudo usermod -aG docker rke ;
+            systemctl enable docker;
+			exit 0
+			;;
+		centos|fedora)
+			if [ "$lsb_dist" = "fedora" ]; then
+
+				dnf remove docker \
+                    docker-client \
+                    docker-client-latest \
+                    docker-common \
+                    docker-latest \
+                    docker-latest-logrotate \
+                    docker-logrotate \
+                    docker-selinux \
+                    docker-engine-selinux \
+                    docker-engine
+
+                mv /etc/yum.repos.d/fedora.repo /etc/yum.repos.d/fedora.repo.backup
+                mv /etc/yum.repos.d/fedora-updates.repo /etc/yum.repos.d/fedora-updates.repo.backup
+
+                curl -o /etc/yum.repos.d/fedora.repo http://mirrors.aliyun.com/repo/fedora.repo
+                curl -o /etc/yum.repos.d/fedora-updates.repo http://mirrors.aliyun.com/repo/fedora-updates.repo
+               
+                dnf -y install dnf-plugins-core;
+                dnf config-manager --add-repo \
+                    {{mirror_url}}/docker-ce/linux/fedora/docker-ce.repo;
+                d_ver=$(dnf list docker-ce --showduplicates | sort -r | grep {{docker_version}}|awk '{print $2}');
+                dnf -y install docker-ce-${d_ver} docker-ce-cli-${d_ver} containerd.io;
+                sudo usermod -aG docker rke ;
+                systemctl enable docker;
+			else
+				yum remove docker \
+                    docker-client \
+                    docker-client-latest \
+                    docker-common \
+                    docker-latest \
+                    docker-latest-logrotate \
+                    docker-logrotate \
+                    docker-selinux \
+                    docker-engine-selinux \
+                    docker-engine \
+                    container*
+
+                    cp /etc/yum.repos.d/CentOS-Base.repo /etc/yum.repos.d/CentOS-Base.repo-bak
+                    curl -o /etc/yum.repos.d/CentOS-Base.repo http://mirrors.aliyun.com/repo/Centos-$dist_version.repo
+
+                    yum-config-manager --add-repo {{mirror_url}}/docker-ce/linux/centos/docker-ce.repo;
+                    yum update -y;
+                    yum install -y yum-utils device-mapper-persistent-data lvm2 bash-completion;
+                    d_ver=$(yum list docker-ce.x86_64 --showduplicates | sort -r|grep {{docker_version}}|awk '{print $2}');
+                    yum downgrade --setopt=obsoletes=0 -y docker-ce-${d_ver} docker-ce-selinux-${d_ver};
+                    sudo usermod -aG docker rke ;
+                    sudo systemctl enable docker;
+			fi
+			exit 0
+			;;
+		*)
+			echo
+			echo "不支持的操作系统类型: '$lsb_dist'，请手动安装Docker。https://docs.docker.com/install/linux/docker-ce/centos/"
+			echo
+			exit 1
+			;;
+	esac
+	exit 1
+}
+
+base_config()
+{
+    # 判断主机名是否符合标准
+    # 检测网关是否配置
+    if ! ip route show |grep -qiE default ; then  
+        echo '警告: 网络未配置默认路由网关，K8S安装将运行失败'; 
+        exit 1;
+    fi
+
+    # 修改时区
+    ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+
+    # 修改系统语言环境
+    if [ $LANG != 'en_US.UTF-8' ]; then
+       sudo echo 'LANG="en_US.UTF-8"' >> /etc/profile;source /etc/profile
+    fi
+
+    check_os
+
+    if [ "$lsb_dist" = 'centos' ] || [ "$lsb_dist" = 'fedora' ] ;then
+
+        echo "你的系统是$lsb_dist"
+
+        ip_forward=$(sysctl net.ipv4.ip_forward| grep -o [0-9]$)
+        if [ "$ip_forward" = "0" ];then
+            echo "ip_forward没有开启，将被开启"
+            sudo echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+            sudo sysctl -p
+        else
+            echo "ip_forward已开启"
+        fi
+
+        selinux_state=$(cat /etc/selinux/config |grep -w "^SELINUX")
+        if [ "$selinux_state" = "SELINUX=disabled" ];then
+            echo "SELINUX已关闭"
+        else
+            echo 'SELINUX没有关闭，将被关闭'
+            sudo sed -i 's/SELINUX=enforcing/SELINUX=disabled/g' /etc/selinux/config
+        fi
+
+        echo '关闭firewalld防火墙'
+        systemctl stop firewalld.service 
+        systemctl disable firewalld.service
+
+    fi
+
+    if [ "$lsb_dist" = 'ubuntu' ] || [ "$lsb_dist" = 'debian' ]; then
+
+        echo '关闭ufw防火墙'
+        ufw disable
+
+        echo '检测是否有No swap limit support'
+        if docker info | grep -qiE 'No swap limit support';then
+            sudo sed -i 's/en[[:alnum:]]*/eth0/g' /etc/network/interfaces;
+            sudo sed -i 's/GRUB_CMDLINE_LINUX="\(.*\)"/GRUB_CMDLINE_LINUX="net.ifnames=0 cgroup_enable=memory swapaccount=1 biosdevname=0 \1"/g' /etc/default/grub;
+            sudo update-grub;
+        fi
+    fi
+
+    echo '配置Docker'
+    if docker info | grep -qiE 'overlay2' ; then 
+
+        touch /etc/docker/daemon.json
+        cat > /etc/docker/daemon.json <<EOF
+        {
+        "log-driver": "json-file",
+        "log-opts": {
+            "max-size": "100m",
+            "max-file": "3"	
+        },
+        {% if private_registry_on == 'true' %}
+        "insecure-registries": ["{{registry_url}}"],
+        {% endif %}
+        "max-concurrent-downloads": 10,
+        "max-concurrent-uploads": 10,
+        {% if registry_mirrors is defined %}
+        "registry-mirrors": ["{{registry_mirrors}}"],
+        {% endif %}
+        "storage-driver": "overlay2",
+        "storage-opts": [
+        "overlay2.override_kernel_check=true"
+        ]
+        }
+EOF
+        systemctl daemon-reload && systemctl restart docker
+    else
+
+        touch /etc/docker/daemon.json
+        cat > /etc/docker/daemon.json <<EOF
+        {
+        "log-driver": "json-file",
+        "log-opts": {
+            "max-size": "100m",
+            "max-file": "3"	
+        },
+        {% if private_registry_on == 'true' %}
+        "insecure-registries": ["{{registry_url}}"],
+        {% endif %}
+        "max-concurrent-downloads": 10,
+        "max-concurrent-uploads": 10,
+        {% if registry_mirrors is defined %}
+        "registry-mirrors": ["{{registry_mirrors}}"]
+        {% endif %}
+        }
+EOF
+        systemctl daemon-reload && systemctl restart docker
+
+    fi
+}
+
+if command_exists docker && [ -e /var/run/docker.sock ]; then
+
+    docker_version=$( docker -v|awk -F, '{print $1}'|awk '{print $3}'|awk -F. '{print $1"."$2}' )
+    if [ $docker_version = '17.03' ] || [ $docker_version = '18.06' ] || [ $docker_version = '18.09' ] ; then
+        echo '清理Docker残留文件'
+        clean_docker_k8s
+        echo '节点基础配置'
+        base_config
+    else
+        echo 'Docker版本不符合要求，将尝试重新在线安装'
+        install_docker
+        echo '清理Docker残留文件'
+        clean_docker_k8s
+        echo '节点基础配置'
+        base_config
+    fi
+else
+    echo '没有检测到Dokcer安装，将尝试进行在线安装'
+    install_docker
+    echo '清理Docker残留文件'
+    clean_docker_k8s
+    echo '节点基础配置'
+    base_config
+fi
+
+
+
+
+
+
+
+
+
+
+
+    
+
+
+
+
+
+
+
+

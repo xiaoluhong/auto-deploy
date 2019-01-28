@@ -1,0 +1,47 @@
+tiller_images_tag: ' registry.cn-shanghai.aliyuncs.com/rancher/tiller:v2.13.1'
+ssh_agent_auth: false
+ignore_docker_version: 'false'
+network_plugin: 'canal'
+kubernetes_version: 'v1.13.3-rancher1-1'
+docker_socket: '/var/run/docker.sock'
+docker_version: '18.06.3'
+mirror_url: 'https://mirrors.aliyun.com'
+
+# K8S组件参数
+## kube-api
+cluster_cidr: '10.42.0.0/16'
+cluster_dns_server: '10.43.0.10'
+service_cluster_ip_range: '10.43.0.0/16'
+service_node_port_range: '30000-32767'
+pod_security_policy: false
+always_pull_images: false
+
+## kube-controller
+node_monitor_period: '5'
+node_monitor_grace_period: '20'
+node_startup_grace_period: '30s'
+pod_eviction_timeout: '1m'
+
+## kubelet
+max_pods: '250'
+sync_frequency: '3s'
+max_open_files: '2000000'
+kube_api_burst: '30'
+kube_api_qps: '15'
+serialize_image_pulls: 'false'
+registry_burst: '10'
+registry_qps: '0'
+
+# etcd快照 (true或者false)
+etcd_snapshot_on: 'true'
+etcd_retention: '6'
+etcd_interval_hours: '12'
+etcd_quota_backend_bytes: '4294967296'
+
+## dns相关参数(true或者false)
+dns_on: true
+dns_provider: kube-dns
+dns_upstream_nameservers: '114.114.114.114,1.2.4.8'
+
+## Metrics Server(true或者false)
+metrics_server_on: true

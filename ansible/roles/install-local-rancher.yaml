@@ -1,0 +1,19 @@
+---
+# 配置初始化、安装local集群、安装Rancher HA
+- hosts: 127.0.0.1
+  vars_files:
+    - /etc/ansible/group_vars/{{ host_group }}.yaml
+  gather_facts: no 
+  roles:
+  - { role: 'cert', tags: "cert"  }
+  - { role: 'k8s' , tags: "k8s" }
+  - { role: 'rancher' ,tags: "rancher" }
+
+# 安装Haproxy和Keepalived
+- hosts: local
+  vars_files:
+    - /etc/ansible/group_vars/{{ host_group }}.yaml
+  gather_facts: no 
+  roles:
+  - { role: haproxy, when: "lb == 'true'" }
+  - { role: keepalived, when: "lb == 'true'" }

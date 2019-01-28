@@ -1,0 +1,17 @@
+########### 参数说明 ###########
+## name：主机名
+## internal_address：RKE内部地址
+## ansible_ssh_port：ssh端口
+## ansible_ssh_user：ansible ssh用户
+## ansible_ssh_pass：ansible ssh用户密码
+## ansible_become_pass：sudo权限密码
+## ansible_ssh_private_key_file：节点登录ssh Key
+## role: controlplane,worker,etcd 定义K8S集群节点角色，可以单选可以多选,逗号隔开，不填则不会安装K8S
+## lb=true: 表示使用本地的负载均衡，将部署Haproxy服务
+
+########### local节点组 ###########
+[local]
+1.1.1.41 internal_address=1.1.1.41 name=k8s-node00 role=controlplane,worker,etcd lb=true
+#10.1.86.201 internal_address=10.1.86.201 name=k8s-node01 role=controlplane,worker,etcd lb=true  
+#10.1.86.202 internal_address=10.1.86.202 name=k8s-node02 role=controlplane,worker,etcd
+

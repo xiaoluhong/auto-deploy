@@ -1,0 +1,126 @@
+---
+# 主机名标准检查
+
+- name: 停止宿主机安装的kube相关服务
+  shell: 'systemctl disable {{ item }} && systemctl  stop {{ item }}'
+  with_items:
+      - kubelet.service
+      - kube-scheduler.service
+      - kube-proxy.service
+      - kube-controller-manager.service
+      - kube-apiserver.service
+
+# 检查文件残留
+- name: Docker 初始化
+  shell: '{{ item }}'
+  with_items:
+      ## 删除所有容器
+      - 'docker rm -f $(docker ps -qa)'
+      ## 删除所有容器卷
+      - 'docker volume rm $(docker volume ls -q)'  
+      ## 卸载所有容器挂载
+      - 'for mount in $(mount | grep tmpfs | grep '/var/lib/kubelet' | awk '{ print $3 }') /var/lib/kubelet /var/lib/rancher; do umount $mount; done'
+
+- name: 备份K8S配置文件
+  shell: 'mv -f /etc/kubernetes/ /etc/kubernetes-`date +%Y%m%d%H%M`-bak/'
+  stat:
+    path: /etc/kubernetes/
+  register: p
+  when: p.stat.exists
+
+- name: 备份ETCD数据
+  shell: 'mv -f /var/lib/etcd/  /var/lib/etcd-`date +%Y%m%d%H%M`-bak/'
+  stat:
+    path: /var/lib/etcd/
+  register: p
+  when: p.stat.exists
+
+- name: 备份RKE数据
+  shell: 'mv -f /opt/rke/ /opt/rke-`date +%Y%m%d%H%M`-bak/'
+  stat:
+    path: /opt/rke/
+  register: p
+  when: p.stat.exists
+
+- name: 备份Rancher数据
+  shell: 'mv -f /var/lib/rancher/ /var/lib/rancher-`date +%Y%m%d%H%M`-bak/'
+  stat:
+    path: /var/lib/rancher/
+  register: p
+  when: p.stat.exists
+
+- name: 删除其他残留文件
+  shell: 'rm -rf {{ item }}'
+  with_items:
+      - /etc/ceph
+      - /etc/cni 
+      - /opt/cni 
+      - /run/secrets/kubernetes.io
+      - /run/calico 
+      - /run/flannel
+      - /var/lib/calico 
+      - /var/lib/cni
+      - /var/lib/kubelet
+      - /var/log/containers
+      - /var/log/pods
+      - /var/run/calico
+
+# 配置主机别名(hosts)
+
+# 配置DNS
+
+# 配置Selinux
+- name: 禁止selinux
+  shell: 'sed -i "s/SELINUX=enforcing/SELINUX=disabled/g" /etc/selinux/config'
+  shell: 'sed -i "s/SELINUX=permissive/SELINUX=disabled/g" /etc/selinux/config'
+
+# 检查时间、时区
+- name: 禁止selinux
+  shell: 'ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime'
+  shell: 'echo 'LANG="en_US.UTF-8"' >> /etc/profile;source /etc/profile'
+
+# 检查防火墙
+- name: centos/redhat禁止防火墙
+  shell: 'systemctl stop firewalld.service && systemctl disable firewalld.service'
+  when: ansible_facts['distribution'] == "CentOS" or ansible_facts['distribution'] == "Fedora" or ansible_facts['distribution'] == "RedHat" or ansible_facts['distribution'] == "SUSE"
+- name: 禁止防火墙
+  shell: 'ufw disable && ufw stop'
+  when: ansible_facts['distribution'] == "Ubuntu" 
+
+# 检测内核参数
+## 检查 No memory limit support
+## 检查 bridge-nf-call-ip(ipv6)tables is disabled
+## 检查 WARNING IPv4 forwarding is disabled
+- name: 内核参数优化
+  shell: 'echo {{ item }} >> /etc/sysctl.conf'
+  shell: 'sysctl -p'
+  with_items:
+      - net.ipv4.ip_forward=1
+      - net.bridge.bridge-nf-call-iptables=1
+      - net.ipv4.neigh.default.gc_thresh1=4096
+      - net.ipv4.neigh.default.gc_thresh2=6144
+      - net.ipv4.neigh.default.gc_thresh3=8192
+
+# Docker镜像加速
+
+# 分发镜像
+- name: 分发Haproxy镜像
+  copy: 'src=/etc/ansible/roles/prepare/images/{{ item }} dest=~/{{ item }}'
+  shell: 'docker load -i ~/{{ item }}'
+  with_items:
+    - haproxy.tgz
+  when: haproxy is defined and haproxy == 'true'
+
+- name: 分发Tiller镜像
+  copy: 'src=/etc/ansible/roles/prepare/images/{{ item }} dest=~/{{ item }}'
+  shell: 'docker load -i ~/{{ item }}'
+  with_items:
+    - tiller.tgz
+  when: k8s is defined and k8s == 'true'
+
+- name: 分发Keepalived镜像
+  copy: 'src=/etc/ansible/roles/prepare/images/{{ item }} dest=~/{{ item }}'
+  shell: 'docker load -i ~/{{ item }}'
+  with_items:
+    - keepalived.tgz
+  when: keepalived is defined and keepalived == 'true'

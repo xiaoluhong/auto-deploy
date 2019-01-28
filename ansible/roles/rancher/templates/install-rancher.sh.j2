@@ -1,0 +1,112 @@
+#!/bin/bash
+
+cd /etc/ansible/cluster/{{ host_group }}
+kubectl --kubeconfig=./rke/kube_config_cluster.yml create namespace cattle-system
+
+############# 域名访问模式 #############
+{% if access_type == 'url' %}
+
+# 自动自签名证书
+{% if ssl_self_signed_cert_on == 'true' and ssl_cert_path not defined and ssl_key_path not defined %}
+kubectl --kubeconfig=./rke/kube_config_cluster.yml -n cattle-system create secret generic tls-ca --from-file=./cert/cacerts.pem;
+
+helm --kubeconfig=./rke/kube_config_cluster.yml install /etc/ansible/roles/rancher/templates/{{ rancher_version }} \
+    --name rancher \
+    --namespace cattle-system \
+    --set rancherImage={{ rancherImage }} \
+    --set busyboxImage={{ busyboxImage }} \
+    --set rancherRegistry={{ rancherRegistry }} \
+    --set service.type=NodePort \
+    --set tls=external \
+    --set service.ports.nodePort={{ NodePort_port }} \
+    --set privateCA=true 
+
+{% endif %}
+
+# 自己的自签名证书
+{% if ssl_self_signed_cert_on == 'true' and ssl_cert_path defined and ssl_key_path defined %}
+kubectl --kubeconfig=./rke/kube_config_cluster.yml -n cattle-system create secret generic tls-ca --from-file={{ ssl_ca_path }};
+
+helm --kubeconfig=./rke/kube_config_cluster.yml install /etc/ansible/roles/rancher/templates/{{ rancher_version }} \
+    --name rancher \
+    --namespace cattle-system \
+    --set rancherImage={{ rancherImage }} \
+    --set busyboxImage={{ busyboxImage }} \
+    --set rancherRegistry={{ rancherRegistry }} \
+    --set service.type=NodePort \
+    --set tls=external \
+    --set service.ports.nodePort={{ NodePort_port }} \
+    --set privateCA=true 
+
+{% endif %}
+
+# 权威证书
+{% if ssl_self_signed_cert_on == 'false' and ssl_cert_path defined and ssl_key_path defined %}
+
+helm --kubeconfig=./rke/kube_config_cluster.yml install /etc/ansible/roles/rancher/templates/{{ rancher_version }} \
+    --name rancher \
+    --namespace cattle-system \
+    --set rancherImage={{ rancherImage }} \
+    --set busyboxImage={{ busyboxImage }} \
+    --set rancherRegistry={{ rancherRegistry }} \
+    --set service.type=NodePort \
+    --set tls=external \
+    --set service.ports.nodePort={{ NodePort_port }} \
+    
+{% endif %}
+{% endif %}
+
+############# ip 访问模式 #############
+{% if access_type == 'ip' %}
+
+# 自动生成自签名证书
+{% if ssl_self_signed_cert_on == 'true' and ssl_cert_path not defined and ssl_key_path not defined %}
+kubectl --kubeconfig=./rke/kube_config_cluster.yml -n cattle-system create secret tls tls-rancher-ingress --cert=./cert/tls.crt --key=./cert/tls.key;
+kubectl --kubeconfig=./rke/kube_config_cluster.yml -n cattle-system create secret generic tls-ca --from-file=./cert/cacerts.pem;
+
+helm --kubeconfig=./rke/kube_config_cluster.yml install /etc/ansible/roles/rancher/templates/{{ rancher_version }} \
+    --name rancher \
+    --namespace cattle-system \
+    --set rancherImage={{ rancherImage }} \
+    --set busyboxImage={{ busyboxImage }} \
+    --set rancherRegistry={{ rancherRegistry }} \
+    --set service.type=NodePort \
+    --set service.ports.nodePort={{ NodePort_port }} \
+    --set privateCA=true 
+
+{% endif %}
+
+# 自己的自签名证书
+{% if ssl_self_signed_cert_on == 'true' and ssl_cert_path defined and ssl_key_path defined %}
+kubectl --kubeconfig=./rke/kube_config_cluster.yml -n cattle-system create secret tls tls-rancher-ingress --cert={{ ssl_cert_path }} --key={{ ssl_key_path }};
+kubectl --kubeconfig=./rke/kube_config_cluster.yml -n cattle-system create secret generic tls-ca --from-file={{ ssl_ca_path }};
+
+helm --kubeconfig=./rke/kube_config_cluster.yml install /etc/ansible/roles/rancher/templates/{{ rancher_version }} \
+    --name rancher \
+    --namespace cattle-system \
+    --set rancherImage={{ rancherImage }} \
+    --set busyboxImage={{ busyboxImage }} \
+    --set rancherRegistry={{ rancherRegistry }} \
+    --set service.type=NodePort \
+    --set service.ports.nodePort={{ NodePort_port }} \
+    --set privateCA=true 
+
+{% endif %}
+
+# 权威证书
+{% if ssl_self_signed_cert_on == 'false' and ssl_cert_path defined and ssl_key_path defined %}
+kubectl --kubeconfig=./rke/kube_config_cluster.yml -n cattle-system create secret tls tls-rancher-ingress --cert={{ ssl_cert_path }} --key={{ ssl_key_path }};
+kubectl --kubeconfig=./rke/kube_config_cluster.yml -n cattle-system create secret generic tls-ca --from-file={{ ssl_ca_path }};
+
+helm --kubeconfig=./rke/kube_config_cluster.yml install /etc/ansible/roles/rancher/templates/{{ rancher_version }} \
+    --name rancher \
+    --namespace cattle-system \
+    --set rancherImage={{ rancherImage }} \
+    --set busyboxImage={{ busyboxImage }} \
+    --set rancherRegistry={{ rancherRegistry }} \
+    --set service.type=NodePort \
+    --set service.ports.nodePort={{ NodePort_port }} 
+{% endif %}
+
+{% endif %}
+  

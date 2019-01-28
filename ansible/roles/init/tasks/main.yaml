@@ -1,0 +1,51 @@
+---
+# 拷贝脚本再进行初始化
+- name: 拷贝初始化文件到节点
+  template: "src={{ item.src }} dest={{ item.dest }} "
+  with_items:
+    - {src: '/etc/ansible/roles/init/templates/init.sh.j2' , dest: '/home/init.sh'}
+
+- name: 执行节点初始化
+  shell: 'sudo bash /home/init.sh '
+ 
+## 分发镜像
+- name: 拷贝Haproxy镜像
+  copy: " src=/etc/ansible/roles/init/images/haproxy.tgz dest=/home/haproxy.tgz "
+  when: lb == 'true'
+
+- name: 导入Haproxy镜像
+  shell: " sudo gunzip -c /home/haproxy.tgz | docker load "
+  when: lb == 'true'
+
+- name: 拷贝Tiller镜像
+  copy: " src=/etc/ansible/roles/init/images/tiller.tgz dest=/home/tiller.tgz "
+  when: role is defined
+
+- name: 导入Tiller镜像
+  shell: " sudo gunzip -c /home/tiller.tgz | docker load "
+  when: role is defined
+
+- name: 拷贝Keepalived镜像
+  copy: " src=/etc/ansible/roles/init/images/keepalived.tgz dest=/home/keepalived.tgz "
+  when: lb == 'true'
+
+- name: 导入Keepalived镜像
+  shell: " sudo gunzip -c /home/keepalived.tgz | docker load "
+  when: lb == 'true'
+
+- name: 创建rke工作用户
+  user:
+    name: rancher
+    password: '$6$aqcL3NHSEhn3aex4$97WNDvfFFDmGi7Mlb3HWpo4MTcQvGHrkyB4/qU09aqg403AcP8oUfyE5X1LAUhLUQYR.EI9r5ZcFmVQXtu9nj.' #rancher
+    groups: docker, sudo   # Empty by default.
+    state: present
+    shell: /bin/bash       # Defaults to /bin/bash
+    system: no             # Defaults to no
+    createhome: yes        # Defaults to yes
+    home: /home/rancher  # Defaults to /home/<username>
+
+## 配置免密登录
+- name: 安装 ssh key
+  authorized_key: user=rancher
+                  key="{{ lookup('file', '/etc/ansible/cluster/{{ host_group }}/ssh/ssh_rsa_key.pub') }}" 
+                  state=present
