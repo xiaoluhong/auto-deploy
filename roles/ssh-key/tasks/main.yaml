@@ -1,0 +1,26 @@
+---
+- name: 检查ssh_rsa_key文件
+  stat:
+    path: /etc/ansible/cluster/{{ host_groups }}/ssh-key/ssh_rsa_key
+  register: stat_result
+  tags: [ rancher-k8s-install,k8s-install,ssh-key,re-ssh-key,never ]
+
+- name: 创建ssh工作目录
+  file:
+    path: "/etc/ansible/cluster/{{ host_groups }}/ssh-key/"
+    state: directory
+  tags: [ rancher-k8s-install,k8s-install,ssh-key,re-ssh-key,never ]
+  when: stat_result.stat.exists == False
+
+- name: 生成ssh key文件
+  shell: " cd /etc/ansible/cluster/{{ host_groups }}/ssh-key/; {{ item }} "
+  with_items:
+    - ' ssh-keygen -q -t rsa -f ssh_rsa_key -C "" -N "" '
+  tags: [ rancher-k8s-install,k8s-install,ssh-key,never ]
+  when: stat_result.stat.exists == False
+
+- name: 重新生成ssh key文件
+  shell: " cd /etc/ansible/cluster/{{ host_groups }}/ssh-key/; {{ item }} "
+  with_items:
+    - ' rm -rf ssh_rsa_key; ssh-keygen -q -t rsa -f ssh_rsa_key -C "" -N "" '
+  tags: [ re-ssh-key,never ]

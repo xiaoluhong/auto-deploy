@@ -1,0 +1,27 @@
+---
+- hosts: "127.0.0.1"
+- hosts: "all"
+
+## 初始化节点
+- hosts: "{{ host_groups }}"
+  vars_files:
+    - /etc/ansible/config/all.yaml
+  gather_facts: false
+  roles:
+  - { role: 'init' }
+
+# rancher 创建自定义集群并获取节点注册命令
+- hosts: 127.0.0.1
+  vars_files:
+    - /etc/ansible/config/all.yaml
+  gather_facts: false
+  roles:
+  - { role: 'custom-k8s-cfg' }
+
+# custom k8s 集群安装
+- hosts: "{{ host_groups }}"
+  vars_files:
+    - /etc/ansible/config/all.yaml
+  gather_facts: false
+  roles:
+  - { role: 'custom-k8s' }

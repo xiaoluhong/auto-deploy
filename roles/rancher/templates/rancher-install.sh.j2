@@ -1,0 +1,481 @@
+#!/bin/bash
+
+cd /etc/ansible/cluster/
+
+{% if custom_local_kubecfg_file is defined and custom_local_kubecfg_file|length > 0 %}
+KUBECONFIG=${PWD}/custom-kubecfg/{{ custom_local_kubecfg_file }}
+{% else %}
+KUBECONFIG=${PWD}/{{ host_groups }}/rke/kube_config_cluster.yml
+{% endif %}
+
+kubectl --kubeconfig=${KUBECONFIG} create namespace cattle-system
+
+{% if rancher_access_type == 'url' and rancher_external_ssl|bool == false %}
+############# 域名+ingress访问模式 #############
+{% if ssl_certs_type|int == 1 %}
+# 自动自签名证书
+# 创建证书密文
+kubectl --kubeconfig=${KUBECONFIG} -n cattle-system create secret tls tls-rancher-ingress \
+    --cert=./{{ host_groups }}/certs/tls.crt --key=./{{ host_groups }}/certs/tls.key;
+# 创建CA密文
+kubectl --kubeconfig=${KUBECONFIG} -n cattle-system create secret generic tls-ca \
+    --from-file=./{{ host_groups }}/certs/cacerts.pem;
+helm --kubeconfig=${KUBECONFIG} install rancher \
+    /etc/ansible/cluster/templates/{{ rancher_version }} \
+    --namespace cattle-system \
+    --set rancherImage={{ rancherImage }} \
+    --set busyboxImage={{ busyboxImage }} \
+{% if rancherImageTag|length > 0 %}
+    --set rancherImageTag={{ rancherImageTag }} \
+{% endif %}
+{% if privateRegistry|bool == true and systemDefaultRegistry|length > 0 %}
+    --set privateRegistry=true \
+    --set systemDefaultRegistry={{ systemDefaultRegistry|lower }} \
+{% endif %}
+    --set useBundledSystemChart={{ useBundledSystemChart|lower }} \
+    --set hostname={{ rancher_url|lower }} \
+    --set ingress.tls.source=secret \
+{% if noProxy is defined and noProxy|length > 0 %}
+    --set noProxy={{ noProxy }} \
+{% endif %}
+{% if proxy is defined and proxy|length > 0 %}
+    --set noProxy={{ proxy }} \
+{% endif %}
+{% if ingress_configurationSnippet is defined and ingress_configurationSnippet|length > 0 %}
+    --set ingress.configurationSnippet={{ ingress_configurationSnippet }} \
+{% endif %}
+{% if imagePullSecrets is defined and imagePullSecrets|length > 0 %}
+    --set imagePullSecrets={{ imagePullSecrets }} \
+{% endif %}
+{% if debug is defined and debug|bool == true %}
+    --set debug={{ debug }} \
+{% endif %}
+{% if auditLog_hostPath is defined and auditLog_hostPath|length > 0 %}
+    --set auditLog.hostPath={{ auditLog_hostPath }} \
+{% endif %}
+{% if auditLog_level is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.level={{ auditLog_level }} \
+{% endif %}
+{% if auditLog_maxAge is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxAge={{ auditLog_maxAge }} \
+{% endif %}
+{% if auditLog_maxBackups is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxBackups={{ auditLog_maxBackups }} \
+{% endif %}
+{% if auditLog_maxSize is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxSize={{ auditLog_maxSize }} \
+{% endif %}
+{% if auditLog_maxBackups is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxBackups={{ auditLog_maxBackups }} \
+{% endif %}
+    --set privateCA=true
+{% endif %}
+
+{% if ssl_certs_type|int == 2 and ssl_cert_path is defined and ssl_key_path is defined %}
+# 自定义自签名证书
+# 创建证书密文
+kubectl --kubeconfig=${KUBECONFIG} -n cattle-system create secret tls tls-rancher-ingress \
+    --cert=./custom-certs/certs/{{ ssl_cert_path }} --key=./custom-certs/certs/{{ ssl_key_path }};
+# 创建CA密文
+kubectl --kubeconfig=${KUBECONFIG} -n cattle-system create secret generic tls-ca \
+    --from-file=./custom-certs/certs/{{ ssl_ca_path }};
+helm --kubeconfig=${KUBECONFIG} install rancher \
+    /etc/ansible/cluster/templates/{{ rancher_version }} \
+    --namespace cattle-system \
+    --set rancherImage={{ rancherImage }} \
+    --set busyboxImage={{ busyboxImage }} \
+{% if rancherImageTag|length > 0 %}
+    --set rancherImageTag={{ rancherImageTag }} \
+{% endif %}
+{% if privateRegistry|bool == true and systemDefaultRegistry|length > 0 %}
+    --set privateRegistry=true \
+    --set systemDefaultRegistry={{ systemDefaultRegistry|lower }} \
+{% endif %}
+    --set useBundledSystemChart={{ useBundledSystemChart|lower }} \
+    --set hostname={{ rancher_url|lower }} \
+    --set ingress.tls.source=secret \
+{% if noProxy is defined and noProxy|length > 0 %}
+    --set noProxy={{ noProxy }} \
+{% endif %}
+{% if proxy is defined and proxy|length > 0 %}
+    --set noProxy={{ proxy }} \
+{% endif %}
+{% if ingress_configurationSnippet is defined and ingress_configurationSnippet|length > 0 %}
+    --set ingress.configurationSnippet={{ ingress_configurationSnippet }} \
+{% endif %}
+{% if imagePullSecrets is defined and imagePullSecrets|length > 0 %}
+    --set imagePullSecrets={{ imagePullSecrets }} \
+{% endif %}
+{% if debug is defined and debug|bool == true %}
+    --set debug={{ debug }} \
+{% endif %}
+{% if auditLog_hostPath is defined and auditLog_hostPath|length > 0 %}
+    --set auditLog.hostPath={{ auditLog_hostPath }} \
+{% endif %}
+{% if auditLog_level is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.level={{ auditLog_level }} \
+{% endif %}
+{% if auditLog_maxAge is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxAge={{ auditLog_maxAge }} \
+{% endif %}
+{% if auditLog_maxBackups is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxBackups={{ auditLog_maxBackups }} \
+{% endif %}
+{% if auditLog_maxSize is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxSize={{ auditLog_maxSize }} \
+{% endif %}
+{% if auditLog_maxBackups is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxBackups={{ auditLog_maxBackups }} \
+{% endif %}
+    --set privateCA=true
+{% endif %}
+
+{% if ssl_certs_type|int == 3 and ssl_cert_path is defined and ssl_key_path is defined %}
+# 权威证书
+# 创建证书密文
+kubectl --kubeconfig=${KUBECONFIG} -n cattle-system create secret tls tls-rancher-ingress \
+    --cert=./custom-certs/{{ ssl_cert_path }} --key=./custom-certs/{{ ssl_key_path }};
+helm --kubeconfig=${KUBECONFIG} install rancher \
+    /etc/ansible/cluster/templates/{{ rancher_version }} \
+    --namespace cattle-system \
+    --set rancherImage={{ rancherImage }} \
+    --set busyboxImage={{ busyboxImage }} \
+{% if rancherImageTag|length > 0 %}
+    --set rancherImageTag={{ rancherImageTag }} \
+{% endif %}
+{% if privateRegistry|bool == true and systemDefaultRegistry|length > 0 %}
+    --set privateRegistry=true \
+    --set systemDefaultRegistry={{ systemDefaultRegistry|lower }} \
+{% endif %}
+    --set useBundledSystemChart={{ useBundledSystemChart|lower }} \
+    --set hostname={{ rancher_url|lower }} \
+{% if noProxy is defined and noProxy|length > 0 %}
+    --set noProxy={{ noProxy }} \
+{% endif %}
+{% if proxy is defined and proxy|length > 0 %}
+    --set noProxy={{ proxy }} \
+{% endif %}
+{% if ingress_configurationSnippet is defined and ingress_configurationSnippet|length > 0 %}
+    --set ingress.configurationSnippet={{ ingress_configurationSnippet }} \
+{% endif %}
+{% if imagePullSecrets is defined and imagePullSecrets|length > 0 %}
+    --set imagePullSecrets={{ imagePullSecrets }} \
+{% endif %}
+{% if debug is defined and debug|bool == true %}
+    --set debug={{ debug }} \
+{% endif %}
+{% if auditLog_hostPath is defined and auditLog_hostPath|length > 0 %}
+    --set auditLog.hostPath={{ auditLog_hostPath }} \
+{% endif %}
+{% if auditLog_level is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.level={{ auditLog_level }} \
+{% endif %}
+{% if auditLog_maxAge is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxAge={{ auditLog_maxAge }} \
+{% endif %}
+{% if auditLog_maxBackups is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxBackups={{ auditLog_maxBackups }} \
+{% endif %}
+{% if auditLog_maxSize is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxSize={{ auditLog_maxSize }} \
+{% endif %}
+{% if auditLog_maxBackups is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxBackups={{ auditLog_maxBackups }} \
+{% endif %}
+    --set ingress.tls.source=secret
+{% endif %}
+{% endif %}
+
+{% if rancher_access_type == 'url' and rancher_external_ssl|bool == true %}
+############# 域名+外部负载均衡+nodeport访问模式 #############
+{% if ssl_certs_type|int == 1 %}
+# 自动自签名证书
+# 创建CA密文
+kubectl --kubeconfig=${KUBECONFIG} -n cattle-system create secret generic tls-ca \
+    --from-file=./{{ host_groups }}/certs/cacerts.pem;
+helm --kubeconfig=${KUBECONFIG} install rancher \
+    /etc/ansible/cluster/templates/{{ rancher_version }} \
+    --namespace cattle-system \
+    --set rancherImage={{ rancherImage }} \
+    --set busyboxImage={{ busyboxImage }} \
+{% if rancherImageTag|length > 0 %}
+    --set rancherImageTag={{ rancherImageTag }} \
+{% endif %}
+{% if privateRegistry|bool == true and systemDefaultRegistry|length > 0 %}
+    --set privateRegistry=true \
+    --set systemDefaultRegistry={{ systemDefaultRegistry|lower }} \
+{% endif %}
+    --set useBundledSystemChart={{ useBundledSystemChart|lower }} \
+    --set tls=external \
+    --set service.type=NodePort \
+    --set privateCA=true \
+{% if noProxy is defined and noProxy|length > 0 %}
+    --set noProxy={{ noProxy }} \
+{% endif %}
+{% if proxy is defined and proxy|length > 0 %}
+    --set noProxy={{ proxy }} \
+{% endif %}
+{% if ingress_configurationSnippet is defined and ingress_configurationSnippet|length > 0 %}
+    --set ingress.configurationSnippet={{ ingress_configurationSnippet }} \
+{% endif %}
+{% if imagePullSecrets is defined and imagePullSecrets|length > 0 %}
+    --set imagePullSecrets={{ imagePullSecrets }} \
+{% endif %}
+{% if debug is defined and debug|bool == true %}
+    --set debug={{ debug }} \
+{% endif %}
+{% if auditLog_hostPath is defined and auditLog_hostPath|length > 0 %}
+    --set auditLog.hostPath={{ auditLog_hostPath }} \
+{% endif %}
+{% if auditLog_level is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.level={{ auditLog_level }} \
+{% endif %}
+{% if auditLog_maxAge is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxAge={{ auditLog_maxAge }} \
+{% endif %}
+{% if auditLog_maxBackups is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxBackups={{ auditLog_maxBackups }} \
+{% endif %}
+{% if auditLog_maxSize is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxSize={{ auditLog_maxSize }} \
+{% endif %}
+{% if auditLog_maxBackups is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxBackups={{ auditLog_maxBackups }} \
+{% endif %}
+    --set service.ports.nodePort={{ nodeport_http }}
+
+echo "配置./{{ host_groups }}/certs/tls.crt和./{{ host_groups }}/certs/tls.key到外部七层负载均衡器上。"
+{% endif %}
+
+{% if ssl_certs_type|int == 2 %}
+# 自定义自签名证书
+# 创建CA密文
+kubectl --kubeconfig=${KUBECONFIG} -n cattle-system create secret generic tls-ca \
+    --from-file=./custom-certs/{{ ssl_ca_path }};
+helm --kubeconfig=${KUBECONFIG} install rancher \
+    /etc/ansible/cluster/templates/{{ rancher_version }} \
+    --namespace cattle-system \
+    --set rancherImage={{ rancherImage }} \
+    --set busyboxImage={{ busyboxImage }} \
+{% if rancherImageTag|length > 0 %}
+    --set rancherImageTag={{ rancherImageTag }} \
+{% endif %}
+{% if privateRegistry|bool == true and systemDefaultRegistry|length > 0 %}
+    --set privateRegistry=true \
+    --set systemDefaultRegistry={{ systemDefaultRegistry|lower }} \
+{% endif %}
+    --set useBundledSystemChart={{ useBundledSystemChart|lower }} \
+    --set tls=external \
+    --set service.type=NodePort \
+    --set privateCA=true \
+{% if noProxy is defined and noProxy|length > 0 %}
+    --set noProxy={{ noProxy }} \
+{% endif %}
+{% if proxy is defined and proxy|length > 0 %}
+    --set noProxy={{ proxy }} \
+{% endif %}
+{% if ingress_configurationSnippet is defined and ingress_configurationSnippet|length > 0 %}
+    --set ingress.configurationSnippet={{ ingress_configurationSnippet }} \
+{% endif %}
+{% if imagePullSecrets is defined and imagePullSecrets|length > 0 %}
+    --set imagePullSecrets={{ imagePullSecrets }} \
+{% endif %}
+{% if debug is defined and debug|bool == true %}
+    --set debug={{ debug }} \
+{% endif %}
+{% if auditLog_hostPath is defined and auditLog_hostPath|length > 0 %}
+    --set auditLog.hostPath={{ auditLog_hostPath }} \
+{% endif %}
+{% if auditLog_level is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.level={{ auditLog_level }} \
+{% endif %}
+{% if auditLog_maxAge is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxAge={{ auditLog_maxAge }} \
+{% endif %}
+{% if auditLog_maxBackups is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxBackups={{ auditLog_maxBackups }} \
+{% endif %}
+{% if auditLog_maxSize is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxSize={{ auditLog_maxSize }} \
+{% endif %}
+{% if auditLog_maxBackups is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxBackups={{ auditLog_maxBackups }} \
+{% endif %}
+    --set service.ports.nodePort={{ nodeport_http }}
+
+echo "配置./custom-certs/{{ ssl_cert_path }}和./custom-certs/certs/{{ ssl_key_path }}到外部七层负载均衡器上。"
+{% endif %}
+
+{% if ssl_certs_type|int == 3 %}
+# 权威证书
+helm --kubeconfig=${KUBECONFIG} install rancher \
+    /etc/ansible/cluster/templates/{{ rancher_version }} \
+    --namespace cattle-system \
+    --set rancherImage={{ rancherImage }} \
+    --set busyboxImage={{ busyboxImage }} \
+{% if rancherImageTag|length > 0 %}
+    --set rancherImageTag={{ rancherImageTag }} \
+{% endif %}
+{% if privateRegistry|bool == true and systemDefaultRegistry|length > 0 %}
+    --set privateRegistry=true \
+    --set systemDefaultRegistry={{ systemDefaultRegistry|lower }} \
+{% endif %}
+    --set useBundledSystemChart={{ useBundledSystemChart|lower }} \
+    --set service.type=NodePort \
+{% if noProxy is defined and noProxy|length > 0 %}
+    --set noProxy={{ noProxy }} \
+{% endif %}
+{% if proxy is defined and proxy|length > 0 %}
+    --set noProxy={{ proxy }} \
+{% endif %}
+{% if ingress_configurationSnippet is defined and ingress_configurationSnippet|length > 0 %}
+    --set ingress.configurationSnippet={{ ingress_configurationSnippet }} \
+{% endif %}
+{% if imagePullSecrets is defined and imagePullSecrets|length > 0 %}
+    --set imagePullSecrets={{ imagePullSecrets }} \
+{% endif %}
+{% if debug is defined and debug|bool == true %}
+    --set debug={{ debug }} \
+{% endif %}
+{% if auditLog_hostPath is defined and auditLog_hostPath|length > 0 %}
+    --set auditLog.hostPath={{ auditLog_hostPath }} \
+{% endif %}
+{% if auditLog_level is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.level={{ auditLog_level }} \
+{% endif %}
+{% if auditLog_maxAge is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxAge={{ auditLog_maxAge }} \
+{% endif %}
+{% if auditLog_maxBackups is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxBackups={{ auditLog_maxBackups }} \
+{% endif %}
+{% if auditLog_maxSize is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxSize={{ auditLog_maxSize }} \
+{% endif %}
+{% if auditLog_maxBackups is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxBackups={{ auditLog_maxBackups }} \
+{% endif %}
+    --set service.ports.nodePort={{ nodeport_http }}
+{% endif %}
+{% endif %}
+
+{% if rancher_access_type == 'ip' %}
+############# ip+nodeport访问模式 #############
+{% if ssl_certs_type|int == 1 %}
+# 自动生成自签名证书
+# 创建证书密文
+kubectl --kubeconfig=${KUBECONFIG} -n cattle-system create secret tls tls-rancher-ingress \
+    --cert=./{{ host_groups }}/certs/tls.crt --key=./{{ host_groups }}/certs/tls.key;
+# 创建CA密文
+kubectl --kubeconfig=${KUBECONFIG} -n cattle-system create secret generic tls-ca \
+    --from-file=./{{ host_groups }}/certs/cacerts.pem;
+helm --kubeconfig=${KUBECONFIG} install rancher \
+    /etc/ansible/cluster/templates/{{ rancher_version }} \
+    --namespace cattle-system \
+    --set rancherImage={{ rancherImage }} \
+    --set busyboxImage={{ busyboxImage }} \
+{% if rancherImageTag|length > 0 %}
+    --set rancherImageTag={{ rancherImageTag }} \
+{% endif %}
+{% if privateRegistry|bool == true and systemDefaultRegistry|length > 0 %}
+    --set privateRegistry=true \
+    --set systemDefaultRegistry={{ systemDefaultRegistry|lower }} \
+{% endif %}
+    --set useBundledSystemChart={{ useBundledSystemChart|lower }} \
+    --set service.type=NodePort \
+    --set service.ports.nodePort={{ nodeport_https }} \
+{% if noProxy is defined and noProxy|length > 0 %}
+    --set noProxy={{ noProxy }} \
+{% endif %}
+{% if proxy is defined and proxy|length > 0 %}
+    --set noProxy={{ proxy }} \
+{% endif %}
+{% if ingress_configurationSnippet is defined and ingress_configurationSnippet|length > 0 %}
+    --set ingress.configurationSnippet={{ ingress_configurationSnippet }} \
+{% endif %}
+{% if imagePullSecrets is defined and imagePullSecrets|length > 0 %}
+    --set imagePullSecrets={{ imagePullSecrets }} \
+{% endif %}
+{% if debug is defined and debug|bool == true %}
+    --set debug={{ debug }} \
+{% endif %}
+{% if auditLog_hostPath is defined and auditLog_hostPath|length > 0 %}
+    --set auditLog.hostPath={{ auditLog_hostPath }} \
+{% endif %}
+{% if auditLog_level is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.level={{ auditLog_level }} \
+{% endif %}
+{% if auditLog_maxAge is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxAge={{ auditLog_maxAge }} \
+{% endif %}
+{% if auditLog_maxBackups is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxBackups={{ auditLog_maxBackups }} \
+{% endif %}
+{% if auditLog_maxSize is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxSize={{ auditLog_maxSize }} \
+{% endif %}
+{% if auditLog_maxBackups is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxBackups={{ auditLog_maxBackups }} \
+{% endif %}
+    --set privateCA=true
+{% endif %}
+
+{% if ssl_certs_type|int == 2 and ssl_cert_path is defined and ssl_key_path is defined %}
+# 自己的自签名证书
+# 创建证书密文
+kubectl --kubeconfig=${KUBECONFIG} -n cattle-system create secret tls tls-rancher-ingress \
+    --cert=./custom-certs/{{ ssl_cert_path }} --key=./custom-certs/{{ ssl_key_path }};
+# 创建CA密文
+kubectl --kubeconfig=${KUBECONFIG} -n cattle-system create secret generic tls-ca \
+    --from-file=./custom-certs/{{ ssl_ca_path }};
+helm --kubeconfig=${KUBECONFIG} install rancher \
+    /etc/ansible/cluster/templates/{{ rancher_version }} \
+    --namespace cattle-system \
+    --set rancherImage={{ rancherImage }} \
+    --set busyboxImage={{ busyboxImage }} \
+{% if rancherImageTag|length > 0 %}
+    --set rancherImageTag={{ rancherImageTag }} \
+{% endif %}
+{% if privateRegistry|bool == true and systemDefaultRegistry|length > 0 %}
+    --set privateRegistry=true \
+    --set systemDefaultRegistry={{ systemDefaultRegistry|lower }} \
+{% endif %}
+    --set useBundledSystemChart={{ useBundledSystemChart|lower }} \
+    --set service.type=NodePort \
+    --set service.ports.nodePort={{ nodeport_https }} \
+{% if noProxy is defined and noProxy|length > 0 %}
+    --set noProxy={{ noProxy }} \
+{% endif %}
+{% if proxy is defined and proxy|length > 0 %}
+    --set noProxy={{ proxy }} \
+{% endif %}
+{% if ingress_configurationSnippet is defined and ingress_configurationSnippet|length > 0 %}
+    --set ingress.configurationSnippet={{ ingress_configurationSnippet }} \
+{% endif %}
+{% if imagePullSecrets is defined and imagePullSecrets|length > 0 %}
+    --set imagePullSecrets={{ imagePullSecrets }} \
+{% endif %}
+{% if debug is defined and debug|bool == true %}
+    --set debug={{ debug }} \
+{% endif %}
+{% if auditLog_hostPath is defined and auditLog_hostPath|length > 0 %}
+    --set auditLog.hostPath={{ auditLog_hostPath }} \
+{% endif %}
+{% if auditLog_level is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.level={{ auditLog_level }} \
+{% endif %}
+{% if auditLog_maxAge is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxAge={{ auditLog_maxAge }} \
+{% endif %}
+{% if auditLog_maxBackups is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxBackups={{ auditLog_maxBackups }} \
+{% endif %}
+{% if auditLog_maxSize is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxSize={{ auditLog_maxSize }} \
+{% endif %}
+{% if auditLog_maxBackups is defined and ingress_extraAnnotations|length > 0 %}
+    --set auditLog.maxBackups={{ auditLog_maxBackups }} \
+{% endif %}
+    --set privateCA=true
+{% endif %}
+{% endif %}

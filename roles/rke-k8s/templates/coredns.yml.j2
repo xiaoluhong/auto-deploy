@@ -1,0 +1,34 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns
+  namespace: kube-system
+  labels:
+      addonmanager.kubernetes.io/mode: EnsureExists
+data:
+  Corefile: |
+    .:53 {
+        errors
+        health
+        hosts {
+            {{ rancher_extend_ip }} {{ rancher_url|lower }}
+            fallthrough
+        }
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+          pods insecure
+          upstream
+          fallthrough in-addr.arpa ip6.arpa
+          ttl 30
+        }
+        prometheus :9153
+{% if dns_upstream_nameservers|length > 0 %}
+        forward . 114.114.114.114 1.2.4.8
+{% else %}
+        forward . "/etc/resolv.conf"
+{% endif %}
+        cache 30
+        loop
+        reload
+        loadbalance
+    }

@@ -1,0 +1,22 @@
+#!/bin/bash
+{% if rancher_access_type == 'url' %}
+rancher_api_url='https://{{ rancher_url }}'
+{% else %}
+rancher_api_url='https://{{ rancher_extend_ip }}:{{ nodeport_https }}'
+{% endif %}
+{% if (custom_rancher_api_key is defined and custom_rancher_api_key|length == 0) or custom_rancher_api_key is not defined %}
+rancher_api_key='{{ local_agent_token['stdout'] }}'
+{% else %}
+rancher_api_key='{{ custom_rancher_api_key }}'
+{% endif %}
+
+cluster_name=`echo {{ host_groups }} | sed 's/_/-/g' `
+
+cluster_ID=$( curl -s -k -H "Authorization: Bearer ${rancher_api_key}" ${rancher_api_url}/v3/clusters | jq -r ".data[] | select(.name == \"$cluster_name\") | .id" )
+
+CREATEDTS=$( curl -s -k -H "Authorization: Bearer ${rancher_api_key}" ${rancher_api_url}/v3/clusters/${cluster_ID}/clusterregistrationtokens | jq -r '[ .data[].createdTS ] | max' );
+
+# nodeCommand
+curl -s -k -H "Authorization: Bearer ${rancher_api_key}" ${rancher_api_url}/v3/clusters/${cluster_ID}/clusterregistrationtokens | jq --compact-output --raw-output ".data[] | select( .createdTS == "$CREATEDTS" ) .nodeCommand"
+
+

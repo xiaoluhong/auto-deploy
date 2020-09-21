@@ -1,0 +1,27 @@
+---
+- name: 创建rke工作用户
+  user:
+    name: rke-user
+    #password: rancher
+    password: '$6$aqcL3NHSEhn3aex4$97WNDvfFFDmGi7Mlb3HWpo4MTcQvGHrkyB4/qU09aqg403AcP8oUfyE5X1LAUhLUQYR.EI9r5ZcFmVQXtu9nj.'
+    groups: docker
+    state: present
+    shell: /bin/bash       # Defaults to /bin/bash
+    system: no             # Defaults to no
+    createhome: yes        # Defaults to yes
+    home: /home/rke-user  # Defaults to /home/<username>
+  tags: [ rancher-k8s-install,k8s-install,ssh-user,never ]
+
+- name: rke-user用户安装ssh key
+  authorized_key: user=rke-user
+                  key="{{ lookup('file', '/etc/ansible/cluster/rke-k8s/{{ host_groups }}/ssh-key/ssh_rsa_key.pub') }}"
+                  state=present
+  tags: [ rancher-k8s-install,k8s-install,ssh-user,never ]
+  when: rke_custom_ssh_key|bool == false
+
+- name: rke-user用户安装ssh key
+  authorized_key: user=rke-user
+                  key="{{ lookup('file', '/etc/ansible/cluster/custom-ssh-key/{{ host_groups }}.pub') }}"
+                  state=present
+  tags: [ rancher-k8s-install,k8s-install,ssh-user,never ]
+  when: rke_custom_ssh_key|bool == true

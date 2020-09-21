@@ -1,0 +1,116 @@
+#!/bin/bash
+
+command_exists()
+{
+	command -v "$@" > /dev/null 2>&1
+}
+get_distribution()
+{
+	lsb_dist=""
+	if [ -r /etc/os-release ]; then
+		lsb_dist="$(. /etc/os-release && echo "$ID")"
+	fi
+	echo "$lsb_dist"
+}
+
+#检查操作系统
+check_os()
+{
+	if command_exists lsb_release; then
+ 		set +e
+		lsb_release -a -u > /dev/null 2>&1
+		lsb_release_exit_code=$?
+		set -e
+
+ 		if [ "$lsb_release_exit_code" = "0" ]; then
+ 			cat <<-EOF
+			You're using '$lsb_dist' version '$dist_version'.
+			EOF
+
+ 			lsb_dist=$(lsb_release -a -u 2>&1 | tr '[:upper:]' '[:lower:]' | grep -E 'id' | cut -d ':' -f 2 | tr -d '[:space:]')
+			dist_version=$(lsb_release -a -u 2>&1 | tr '[:upper:]' '[:lower:]' | grep -E 'codename' | cut -d ':' -f 2 | tr -d '[:space:]')
+
+ 			cat <<-EOF
+			Upstream release is '$lsb_dist' version '$dist_version'.
+			EOF
+		else
+			if [ -r /etc/debian_version ] && [ "$lsb_dist" != "ubuntu" ] && [ "$lsb_dist" != "raspbian" ]; then
+				if [ "$lsb_dist" = "osmc" ]; then
+ 					lsb_dist=raspbian
+				else
+ 					lsb_dist=debian
+				fi
+				dist_version="$(sed 's/\/.*//' /etc/debian_version | sed 's/\..*//')"
+				case "$dist_version" in
+					9)
+						dist_version="stretch"
+					;;
+					8|'Kali Linux 2')
+						dist_version="jessie"
+					;;
+				esac
+			fi
+		fi
+	fi
+}
+
+base_config()
+{
+    # 判断主机名是否符合标准
+    # 检测网关是否配置
+    if ! ip route show |grep -qiE default; then
+        echo 'Warning: there is no default gateway.';
+        exit 1;
+    fi
+
+    # 修改时区
+    ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+    echo 'Asia/Shanghai' >/etc/timezone
+
+    # 修改系统语言环境
+    if [ $LANG != 'en_US.UTF-8' ]; then
+       sudo echo 'LANG="en_US.UTF-8"' >> /etc/profile;source /etc/profile
+    fi
+
+    check_os
+
+    if [ "$lsb_dist" = 'centos' ] || [ "$lsb_dist" = 'fedora' ]; then
+
+        echo '关闭firewalld防火墙'
+        systemctl stop firewalld.service;systemctl disable firewalld.service >> /dev/null
+
+        # 安装依赖
+        yum install -y yum-utils device-mapper-persistent-data lvm2 bash-completion bash >> /dev/null
+    fi
+
+    if [ "$lsb_dist" = 'ubuntu' ] || [ "$lsb_dist" = 'debian' ]; then
+        echo '关闭ufw防火墙'
+        ufw disable >> /dev/null
+        echo '检测是否有No swap limit support'
+        if docker info | grep -qiE 'No swap limit support';then
+            sudo sed -i 's/en[[:alnum:]]*/eth0/g' /etc/network/interfaces;
+            sudo sed -i 's/GRUB_CMDLINE_LINUX="\(.*\)"/GRUB_CMDLINE_LINUX="net.ifnames=0 cgroup_enable=memory swapaccount=1 biosdevname=0 \1"/g' /etc/default/grub;
+            sudo update-grub;
+        fi
+
+        # 安装依赖
+        apt-get install -y apt-transport-https ca-certificates curl software-properties-common bash-completion gnupg-agent bash >> /dev/null
+    fi
+
+    touch /etc/hosts
+    if ! cat /etc/hosts | grep -qE '127.0.0.1.*localhost'; then
+        echo '127.0.0.1 localhost' >> /etc/hosts;
+    fi
+
+{% if rancher_access_type == 'url' and rancher_url is defined and rancher_extend_ip is defined %}
+    if ! cat /etc/hosts | grep -qE "{{ rancher_extend_ip }}.*{{ rancher_url }}"; then
+        echo "{{ rancher_extend_ip }} {{ rancher_url }}" >> /etc/hosts
+    fi
+{% endif %}
+
+    if ! cat /etc/hosts | grep -qE "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}.*$(hostname)"; then
+        echo "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }} $(hostname)" >> /etc/hosts
+    fi
+}
+
+base_config

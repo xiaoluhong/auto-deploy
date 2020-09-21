@@ -1,0 +1,175 @@
+nodes:
+{% set group = host_groups %}
+{% for host in groups[group] %}
+{% if hostvars[host]['role'] is defined and hostvars[host]['role']|length > 0 %}
+  - address: {{ host }}
+{% if hostvars[host].internal_address is defined %}
+    internal_address: {{ hostvars[host]['internal_address'] }}
+{% endif %}
+{% if hostvars[host].name is defined %}
+    hostname_override: {{ hostvars[host]['name'] }}
+{% endif %}
+    user: rke-user
+    port: {{ hostvars[host]['ansible_ssh_port'] }}
+    role: [{{ hostvars[host]['role'] }}]
+{% if rke_custom_ssh_key is defined and rke_custom_ssh_key|bool == true %}
+    ssh_key_path: '../../custom-ssh-key/{{ host_groups }}'
+{% else %}
+    ssh_key_path: '../ssh-key/ssh_rsa_key'
+{% endif %}
+{% if hostvars[host].rke_docker_socket is defined %}
+    docker_socket: {{ hostvars[host]['rke_docker_socket'] }}
+{% else %}
+    docker_socket: /var/run/docker.sock
+{% endif %}
+{% if hostvars[host].ingress is defined and hostvars[host].ingress|bool == true %}
+    labels:
+      app: ingress
+{% endif %}
+{% endif %}
+{% endfor %}
+ignore_docker_version: {{ rke_ignore_docker_version }}
+ssh_agent_auth: {{ rke_ssh_agent_auth }}
+{% if privateRegistry|bool == true %}
+private_registries:
+  - url: {{ systemDefaultRegistry|lower }}
+    user: {{ registry_username }}
+    password: {{ registry_password }}
+    is_default: true
+{% endif %}
+cluster_name: {{ host_groups }}
+kubernetes_version: {{ kube_api_kubernetes_version }}
+services:
+  etcd:
+    backup_config:
+      enabled: {{ etcd_snapshot_on|lower }}
+      interval_hours: {{ etcd_interval_hours }}
+      retention: {{ etcd_retention }}
+    extra_args:
+      quota-backend-bytes: {{ etcd_quota_backend_bytes }}
+      auto-compaction-retention: {{ etcd_auto_compaction_retention }}
+  kube-api:
+    service_cluster_ip_range: {{ kube_api_service_cluster_ip_range }}
+    service_node_port_range: {{ kube_api_service_node_port_range }}
+    always_pull_images: {{ kube_api_always_pull_images|lower }}
+    pod_security_policy: {{ kube_api_pod_security_policy|lower }}
+    extra_args:
+      audit-log-path: "-"
+      delete-collection-workers: 3
+      v: {{ kube_api_log_level }}
+  kube-controller:
+    cluster_cidr: {{ kube_api_cluster_cidr }}
+    service_cluster_ip_range: {{ kube_api_service_cluster_ip_range }}
+    extra_args:
+      node-monitor-period: {{ kube_controller_node_monitor_period }}
+      node-monitor-grace-period: {{ kube_controller_node_monitor_grace_period }}
+      node-startup-grace-period: {{ kube_controller_node_startup_grace_period }}
+      pod-eviction-timeout: {{ kube_controller_pod_eviction_timeout }}
+      node-cidr-mask-size: {{ kube_controller_node_cidr_mask_size }}
+      feature-gates: {{ kube_controller_feature_gates }}
+      v: {{ kube_controller_log_level }}
+  kubelet:
+    cluster_domain: {{ kubelet_cluster_domain }}
+    cluster_dns_server: {{ kubelet_cluster_dns_server }}
+    fail_swap_on: false
+    # Generate per node serving certificate
+    generate-serving-certificate: {{ kubelet_generate_serving_certificate|lower }}
+    extra_args:
+      feature-gates:
+      docker-root:
+      root-dir: {{ kubelet_root_dir }}
+      pod-manifest-path: {{ kubelet_pod_manifest_path }}
+      max-pods: {{ kubelet_max_pods }}
+      sync-frequency: {{ kubelet_sync_frequency }}
+      max-open-files: {{ kubelet_max_open_files }}
+      kube-api-burst: {{ kubelet_kube_api_burst }}
+      kube-api-qps: {{ kubelet_kube_api_qps }}
+      serialize-image-pulls: {{ kubelet_serialize_image_pulls|lower }}
+      registry-burst: {{ kubelet_registry_burst }}
+      registry-qps: {{ kubelet_registry_qps }}
+      cgroups-per-qos: {{ kubelet_cgroups_per_qos|lower }}
+      cgroup-driver: {{ kubelet_cgroup_driver }}
+      enforce-node-allocatable: {{ kubelet_enforce_node_allocatable }}
+      system-reserved: {{ kubelet_system_reserved }}
+      kube-reserved: {{ kubelet_kube_reserved }}
+      eviction-hard: {{ kubelet_eviction_hard }}
+      eviction-soft: {{ kubelet_eviction_soft }}
+      eviction-soft-grace-period: {{ kubelet_eviction_soft_grace_period }}
+      eviction-max-pod-grace-period: {{ kubelet_eviction_max_pod_grace_period }}
+      eviction-pressure-transition-period: {{ kubelet_eviction_pressure_transition_period }}
+      node-status-update-frequency: {{ kubelet_node_status_update_frequency }}
+      global-housekeeping-interval: {{ kubelet_global_housekeeping_interval }}
+      housekeeping-interval: {{ kubelet_housekeeping_interval }}
+      runtime-request-timeout: {{ kubelet_runtime_request_timeout }}
+      volume-stats-agg-period: {{ kubelet_volume_stats_agg_period }}
+      v: {{ kubelet_log_level }}
+    extra_binds:
+      - "/usr/libexec/kubernetes/kubelet-plugins:/usr/libexec/kubernetes/kubelet-plugins"
+  kubeproxy:
+    extra_args:
+      # 默认使用iptables进行数据转发，如果要启用ipvs，则此处设置为`ipvs`
+{% if kubeproxy_proxy_mode == 'ipvs' %}
+      proxy-mode: {{ kubeproxy_proxy_mode }}
+{% endif %}
+      # 与kubernetes apiserver通信并发数,默认10
+      kube-api-burst: {{ kubeproxy_kube_api_burst }}
+      # 与kubernetes apiserver通信时使用QPS，默认值5，QPS=并发量/平均响应时间
+      kube-api-qps: {{ kubeproxy_kube_api_qps }}
+      v: {{ kubeproxy_log_level }}
+    extra_binds:
+  scheduler:
+    extra_args:
+      v: {{ scheduler_log_level }}
+authentication:
+  strategy: "x509|webhook"
+  sans:
+    - "{{ rancher_extend_ip }}"
+    - "{{ rancher_url }}"
+authorization:
+  mode: rbac
+addon_job_timeout: {{ rke_addon_job_timeout }}
+network:
+  plugin: {{ rke_network_plugin }}
+{% if rke_network_plugin == 'canal' %}
+  mtu: {{ rke_network_canal_mtu }}
+{% endif %}
+{% if rke_network_plugin == 'flannel' %}
+  mtu: {{ rke_network_flannel_mtu }}
+{% endif %}
+{% if rke_network_plugin == 'calico' %}
+  mtu: {{ rke_network_calico_mtu }}
+{% endif %}
+{% if rke_network_plugin == 'canal' %}
+  options:
+{% if rke_network_iface is defined and rke_network_iface|length > 0 %}
+    canal_iface: {{ rke_network_iface }}
+{% endif %}
+{% if rke_network_backend_type is defined and rke_network_backend_type|length > 0 %}
+    canal_flannel_backend_type: {{ rke_network_backend_type }}
+{% endif %}
+{% endif %}
+{% if rke_network_plugin == 'flannel' %}
+  options:
+{% if rke_network_iface is defined and rke_network_iface|length > 0 %}
+    flannel_iface: {{ rke_network_iface }}
+{% endif %}
+{% if rke_network_backend_type is defined and rke_network_backend_type|length > 0 %}
+    flannel_backend_type: {{ rke_network_backend_type }}
+{% endif %}
+{% endif %}
+ingress:
+  provider: {{ rke_ingress_provider }}
+  node_selector:
+    app: ingress
+{% if dns_on == true %}
+dns:
+  provider: {{ dns_provider }}
+  upstreamnameservers: [{{ dns_upstream_nameservers }}]
+{% else %}
+dns:
+  provider: none
+{% endif %}
+{% if metrics_server_on == false %}
+monitoring:
+  provider: none
+{% endif %}

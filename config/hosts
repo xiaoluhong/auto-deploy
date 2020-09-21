@@ -1,0 +1,31 @@
+######## 单台主机配置参数说明 ########
+## name：主机名
+## internal_address：RKE集群内部地址
+## role: controlplane,worker,etcd 定义K8S集群节点角色，可以单选可以多选,逗号隔开，不填则不会安装K8S
+## ingress: 表示要安装ingress控制器,true/false
+
+# 如果节点不是统一的用户名和密码，需要在此为每台主机单独配置登录认证信息
+## ansible_ssh_port：ssh 端口
+## ansible_ssh_user：ansible ssh 用户
+## ansible_ssh_pass：ansible ssh 用户密码
+## ansible_become_pass：sudo 权限密码
+## ansible_ssh_private_key：# 如果节点使用ssh key登录，需要将ssh key存放在 cluster/ansible-ssh-key/ 目录下，此处仅配置ssh key文件名称;
+
+######## local节点组 ########
+# local主机组名称不能修改
+#[local]
+#192.168.50.119 internal_address=192.168.50.119 role=controlplane,worker,etcd ingress=true ansible_ssh_user=rancher ansible_ssh_pass=123456 ansible_become_pass=123456 ansible_ssh_port=22
+
+## 创建custom集群，如果要部署多个custom集群，可以在此配置多个主机组，必须以 custom 为前缀
+[custom_dev1]
+192.168.50.119 internal_address=192.168.50.119 role=controlplane,worker,etcd ingress=true ansible_ssh_user=rancher ansible_ssh_pass=123456 ansible_become_pass=123456 ansible_ssh_port=22
+#1.1.1.131 internal_address=1.1.1.131 role=controlplane ingress=true ansible_ssh_user=root ansible_ssh_pass=123456 ansible_become_pass=123456 ansible_ssh_port=22
+
+#[custom_dev2]
+#
+## 导入外部已有的K8S集群不需要配置节点，此处配置主机组用于定义集群名称，必须以import为前缀
+#[import_dev1]
+#[import_dev2]
+#
+## 创建rke集群并导入rancher，必须为rke为前缀
+#[rke-dev2]

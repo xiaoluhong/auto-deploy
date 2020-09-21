@@ -1,0 +1,72 @@
+#!/bin/sh
+
+MOD='
+ip_vs
+ip_vs_rr
+ip_vs_wrr
+ip_vs_sh
+nf_conntrack_ipv4
+br_netfilter
+ip6_udp_tunnel
+ip_set
+ip_set_hash_ip
+ip_set_hash_net
+iptable_filter
+iptable_nat
+iptable_mangle
+iptable_raw
+nf_conntrack_netlink
+nf_conntrack
+nf_conntrack_ipv4
+nf_defrag_ipv4
+nf_nat
+nf_nat_ipv4
+nf_nat_masquerade_ipv4
+nfnetlink
+udp_tunnel
+veth
+vxlan
+x_tables
+xt_addrtype
+xt_conntrack
+xt_comment
+xt_mark
+xt_multiport
+xt_nat
+xt_recent
+xt_set
+xt_statistic
+xt_tcpudp
+rbd
+'
+
+for mod in ${MOD};
+do
+    # 预加载一次模块
+    modprobe ${mod}
+    # 检查模块是否被加载
+    lsmod | grep ${mod} > /dev/null
+    # 上一步$?返回如果不是0，说明模块没有加载上，接着执行以下循环体
+    if [ $? -ne 0 ]; then
+        n=0
+        # n小于等于5，最多循环6次
+        while [ $n -le 5 ]
+        do
+            # 再次加载模块
+            modprobe ${mod}
+            # 检查模块是否被加载
+            if lsmod | grep ${mod} > /dev/null; then
+                # 如果模块已加载，则设置n的值大于5，结束下一次循环
+                n=10
+            else
+                # 如果模块没有加载，则每一次循环设置n的值+1，直到n大于5后结束循环
+                n=$((n+1))
+            fi
+            # 5次未成功加载，基本可以确定没有此模块
+            if [ $n -eq 6 ]; then
+                echo "$(date +%Y%m%d%H%M) The module ${mod} not exist " >> ~/modprobe.txt
+            fi
+        done
+    fi
+done
+

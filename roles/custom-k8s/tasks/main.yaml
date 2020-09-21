@@ -1,0 +1,11 @@
+---
+
+- name: 拷贝注册命令到节点
+  template:
+    src: /etc/ansible/roles/custom-k8s/templates/register-node.sh.j2
+    dest: /tmp/register-node.sh
+  tags: [ rancher-k8s-install,k8s-install,k8s-update,k8s-reinstall,k8s-cfg,custom-k8s ]
+
+- name: 执行注册命令
+  shell: "bash /tmp/register-node.sh"
+  tags: [ rancher-k8s-install,k8s-install,k8s-update ]

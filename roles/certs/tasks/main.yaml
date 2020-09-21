@@ -1,0 +1,21 @@
+---
+- name: 检查certs工作目录是否存在
+  stat:
+    path: /etc/ansible/cluster/{{ host_groups }}
+  register: stat_result
+  tags: [ rancher-k8s-install,certs,never ]
+
+- name: 创建certs工作目录，如果存在则跳过
+  file:
+    path: /etc/ansible/cluster/{{ host_groups }}
+    state: directory
+  tags: [ rancher-k8s-install,certs,never ]
+  when: ssl_certs_type|int == 1 and stat_result.stat.exists == False
+
+- name: 生成自签名ssl证书
+  shell: "cd /etc/ansible/cluster/{{ host_groups }}; {{ item }}"
+  with_items:
+    # 生成ssl证书文件
+    - "/etc/ansible/bin/create-cert.sh --ssl-domain={{ rancher_url }} --ssl-trusted-ip={{ rancher_extend_ip }} "
+  tags: [ rancher-k8s-install,certs,never ]
+  when: ssl_certs_type|int == 1

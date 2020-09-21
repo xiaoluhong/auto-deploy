@@ -1,0 +1,50 @@
+---
+#- name: 获取系统时间
+#  shell: "date +%Y-%m-%d"
+#  register: current_date
+#  tags: always
+
+- name: 检查 RKE 工作目录是否存在
+  stat:
+    path: /etc/ansible/cluster/rke-k8s/{{ host_groups }}/rke
+  register: rke_stat_result
+  tags: [ rancher-k8s-install,k8s-install,k8s-update,k8s-reinstall,k8s-cfg,never ]
+
+- name: 备份旧 k8s 集群数据
+  shell: "cd /etc/ansible/cluster/rke-k8s/{{ host_groups }}; rm -rf rke-bak-`date +%Y%m%d`; mv -f rke rke-bak-`date +%Y%m%d` "
+  tags: [ rancher-k8s-install,k8s-reinstall,never ]
+  when: rke_stat_result.stat.exists == True
+
+- name: 创建 RKE 工作目录，如果存在则跳过
+  file:
+    path: /etc/ansible/cluster/rke-k8s/{{ host_groups }}/rke
+    state: directory
+  tags: [ rancher-k8s-install,k8s-install,k8s-reinstall,k8s-update,k8s-cfg,never ]
+
+- name: 生成 RKE 配置文件
+  template:
+    src: /etc/ansible/roles/rke-k8s/templates/cluster.yml.j2
+    dest: /etc/ansible/cluster/rke-k8s/{{ host_groups }}/rke/cluster.yml
+  tags: [ rancher-k8s-install,k8s-install,k8s-update,k8s-reinstall,k8s-cfg,never ]
+
+- name: 安装或升级 {{ host_groups }} k8s 集群 - 使用自定义的 rke 版本
+  shell: "cd /etc/ansible/cluster/rke-k8s/{{ host_groups }}/rke; /etc/ansible/bin/{{ rke_version }} {{ rke_arg }} --config cluster.yml"
+  tags: [ rancher-k8s-install,k8s-install,k8s-update,never ]
+  when: rke_version is defined and rke_version|length > 0
+
+- name: 重装 {{ host_groups }} k8s 集群 - 使用自定义的 rke 版本
+  shell: "cd /etc/ansible/cluster/rke-k8s/{{ host_groups }}/rke; /etc/ansible/bin/{{ rke_version }} {{ rke_arg }} --config cluster.yml"
+  tags: [ k8s-reinstall,never ]
+  when: rke_version is defined and rke_version|length > 0
+
+- name: 生成Core DNS配置映射
+  template:
+    src: /etc/ansible/roles/rke-k8s/templates/coredns.yml.j2
+    dest: /etc/ansible/cluster/rke-k8s/{{ host_groups }}/rke/coredns.yml
+  tags: [ rancher-k8s-install,rancher-install,never ]
+  when: [ dns_resolv == false and rancher_url|length > 0 and rancher_extend_ip|length > 0 ]
+
+- name: 更新Core DNS配置
+  shell: "kubectl --kubeconfig=/etc/ansible/cluster/rke-k8s/{{ host_groups }}/rke/kube_config_cluster.yml apply -f /etc/ansible/cluster/{{ host_groups }}/rke/coredns.yml"
+  tags: [ rancher-k8s-install,rancher-install,never ]
+  when: [ dns_resolv == false and rancher_url|length > 0 and rancher_extend_ip|length > 0 ]

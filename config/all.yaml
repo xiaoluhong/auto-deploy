@@ -1,0 +1,214 @@
+###### ansibled全局登录参数 ######
+## 如果节点有统一的用户名和密码，可以在此统一设置,如果没有则需要在 hosts 文件中为每一个节点单独配置登录账号和密码;
+# ansible_ssh_port：ssh 端口;
+# ansible_ssh_user：ansible ssh 用户;
+# ansible_ssh_pass：ansible ssh 用户密码;
+# ansible_become_user: sudo 权限用户
+# ansible_become_password 权限密码;
+# ansible_ssh_private_key：节点登录 ssh Key;
+ansible_ssh_port: 22
+## ansible_ssh_user: 'root'
+## ansible_ssh_pass: '123456'
+## ansible_become_user: root
+## ansible_become_password: '123456'
+ansible_ssh_private_key: '' # 如果节点使用ssh key登录，需要将ssh key存放在 cluster/ansible-ssh-key/ 目录下，此处仅填写ssh key文件名称;
+
+###### Node 初始化 ######
+## 节点初始化包含:
+# 1. docker 配置优化。如果docker有自定义配置，请设置为alse；
+# 2. 主机相关参数优化。
+# 3. 主机残留文件的清理。将清理节点上所有容器、容器卷、容器网卡，以及rancher和K8S相关的目录；
+docker_init: true # true/false
+node_init: true # true/false
+node_clean: true # true/false
+iptables_clean: true # true/false
+
+###### Docker 配置参数 ######
+docker_version: '19.03.8'
+docker_download_mirror_url: 'https://mirrors.aliyun.com'
+docker_registry_mirrors: 'https://7bezldxe.mirror.aliyuncs.com'
+docker_bip: 192.168.100.1/24
+
+###### Rancher server配置参数 ######
+# 如果在现有K8S上安装rancher，此处设置为 true，同时配置 custom_local_kubecfg_file 。
+existing_k8s: false
+# 自定义kubecfg文件，用于在已有的K8S集群上进行rancher安装。文件需保存到 cluster/custom-kubecfg/ 目录下，此处仅填写文件名。
+custom_local_kubecfg_file: ''
+
+## rancher 访问模式(url或者ip)
+# 如果 rancher_access_type 为 url，而 rancher_external_ssl 为 false，则使用ingress作为ssl终止来代理rancher服务;
+# 如果 rancher_access_type 为 url，而 rancher_external_ssl 为 true，将把rancher的80端口通过nodeport映射到主机端口上，默认主机端口 30080。注意这种架构需要单独部署外部七层代理，外部七层代理服务代理到 节点ip+30080;
+# 如果 rancher_access_type 为 ip，将把rancher的443端口通过nodeport映射到主机端口上，默认主机端口 30443;
+rancher_access_type: 'url'
+rancher_external_ssl: false
+# 用于域名访问Rancher的URL地址，如果使用Nodeport方式访问rancher，则可不设置;
+rancher_url: demo.cnrancher.com
+# 如果通过ip访问rancher，需要配置扩展IP并修改ancher_access_type为ip。在没有DNS服务器解析的环境中，将会自动在节点的 /etc/hosts 中把rancher_url指向rancher_extend_ip。
+rancher_extend_ip: 192.168.50.119
+
+## DNS解析
+# rancher_url是否有外部或者内部DNS服务器解析，如果没有经过DNS服务器解析则设置为false，安装的时候将自动在集群DNS中配置rancher_url与rancher_extend_ip的对应关系，用于agent访问rancher server。
+dns_resolv: false # true/false
+
+## rancher chart 配置参数
+rancher_version: v2.4.2
+# 镜像名后不加tag
+rancherImage: rancher/rancher
+# 一般情况不需要配置镜像tag，默认通过chart获取。某些情况下如果要使用特定镜像版本，这可以在此定义镜像tag。
+rancherImageTag: ''
+busyboxImage: library/busybox
+nodeport_http: 30080
+nodeport_https: 30443
+useBundledSystemChart: false
+noProxy: ''
+proxy: ''
+ingress_configurationSnippet: ''
+ingress_extraAnnotations: ''
+imagePullSecrets: ''
+debug: false
+# 主机上的审计日志文件路径(仅当auditLog.destination被设置为hostPath时才适用)
+auditLog_hostPath: '/var/log/rancher/audit'
+auditLog_level: 3
+# 保留旧审计日志文件的最大天数(仅当auditLog.destination被设置为hostPath时适用)
+auditLog_maxAge: 1
+# 要保留的最大审计日志文件数量(仅当auditLog.destination被设置为hostPath时才适用)
+auditLog_maxBackups: 1
+# 在轮换审计日志文件之前，它的最大大小(以兆为单位)(仅当auditLog.destination被设置为hostPath时才适用)
+auditLog_maxSize: 100
+
+## SSL证书配置
+# ssl证书类型. 可选值1,2,3;
+# 1. 使用自动自签名ssl证书;
+# 2. 使用自定义ssl证书. 需要手动将cert文件和key文件以及CA文件存放在 cluster/rke-k8s/local/custom-certs/ 目录下，依次命名为: tls.crt,tls.key和cacerts.pem;
+# 3. 使用权威ssl证书. 需要手动将cert文件和key文件存放在 cluster/rke-k8s/local/custom-certs/ 目录下，依次命名为: tls.crt,tls.key;
+ssl_certs_type: 1
+ssl_cert_path: tls.crt
+ssl_key_path: tls.key
+ssl_ca_path: cacerts.pem
+
+###### custom 集群相关参数 ######
+# 对于在已有的rancher上创建 custom 集群，需要提供custom_rancher_api_key
+custom_rancher_api_key: 'token-5kphs:kthp4682rd98jr8dtcgsxqp9twrvdwhgqh2tkrr2x4gv6mrtncgmdt'
+
+# 自定义集群
+custom_k8s_Version: ''
+custom_k8s_network_plugin: canal
+custom_k8s_quota_backend_bytes: 6442450944
+custom_k8s_auto_compaction_retention: 240
+custom_k8s_ingress_provider: nginx
+custom_k8s_ignoreDocker_Version: true
+custom_k8s_monitoring_provider: metrics-server
+custom_k8s_service_NodePort_Range: 30000-32767
+
+###### import 集群相关参数 ######
+## 在已有的rancher上导入集群，需要提供import_rancher_api_key
+import_rancher_api_key: ''
+
+## 创建 import 集群
+# 1. 如果 hosts 文件中定义了以 import 为前缀的主机组，则将会自动创建 import 集群并执行导入命令
+# 2. 必须将待导入集群的kubecfg配置文件保存到 cluster/import-k8s/ 目录下，并以主机组名称来命名，比如：import-dev1.yaml
+
+###### RKE K8S 集群相关参数 ######
+## 如果需要将创建的rke集群自动导入rancher，此处需设置为 true，如果是导入已有的 rancher ,则需要配置 rke_rancher_api_key
+rke_cluster_to_rancher: true
+rke_rancher_api_key: ''
+
+## 定义rke版本，需把二进制文件存放于 bin/ 目录，此处填写二进制文件名称。
+rke_version: 'rke_v0.3.2'
+rke_addon_job_timeout: 30
+rke_ssh_agent_auth: false
+rke_ignore_docker_version: false
+rke_network_plugin: canal # flannel、canal、calico
+rke_network_canal_mtu: 1450
+rke_network_flannel_mtu: 1500
+rke_network_calico_mtu: 1500
+rke_network_iface: ''
+rke_network_backend_type: vxlan
+rke_docker_socket: /var/run/docker.sock
+rke_ingress_provider: nginx
+# 默认会自动创建ssh key用于rke账户认证登录，如果要使用自定义的ssh key，需要将公钥和私钥保存到cluster/custom-ssh-key/目录下，并以主机组来文件命名
+rke_custom_ssh_key: false
+
+## 设置私有镜像仓库(true或者false)(如果是离线部署则必须配置)
+privateRegistry: true
+# 注意：仓库地址不加协议头
+systemDefaultRegistry: registry.cn-hangzhou.aliyuncs.com
+registry_username: ''
+registry_password: ''
+registry_email: ''
+
+## etcd备份 (true或者false)
+etcd_snapshot_on: true
+etcd_retention: 6
+etcd_interval_hours: 12
+etcd_quota_backend_bytes: 4294967296
+etcd_auto_compaction_retention: 240
+
+## kube-api
+kube_api_cluster_cidr: 10.42.0.0/16
+kube_api_service_cluster_ip_range: 10.43.0.0/16
+kube_api_service_node_port_range: 30000-32767
+kube_api_pod_security_policy: false
+kube_api_always_pull_images: false
+kube_api_kubernetes_version: ''
+kube_api_log_level: 1
+
+## kube-controller
+kube_controller_node_monitor_period: 5s
+kube_controller_node_monitor_grace_period: 20s
+kube_controller_node_startup_grace_period: 30s
+kube_controller_pod_eviction_timeout: 1m
+kube_controller_node_cidr_mask_size: 24
+kube_controller_feature_gates: "TaintBasedEvictions=false"
+kube_controller_log_level: 1
+
+## kubelet
+kubelet_cluster_dns_server: 10.43.0.10
+kubelet_max_pods: 250
+kubelet_sync_frequency: 3s
+kubelet_max_open_files: 2000000
+kubelet_kube_api_burst: 30
+kubelet_kube_api_qps: 15
+kubelet_serialize_image_pulls: false
+kubelet_registry_burst: 10
+kubelet_registry_qps: 0
+kubelet_cluster_domain: cluster.local
+kubelet_pod_manifest_path: /etc/kubernetes/manifest/
+kubelet_root_dir:  /var/lib/kubelet
+kubelet_docker_root: /var/lib/docker
+kubelet_feature_gates: TaintBasedEvictions=false
+kubelet_log_level: 1
+kubelet_generate_serving_certificate: false
+kubelet_cgroups_per_qos: true
+kubelet_cgroup_driver: cgroupfs
+kubelet_enforce_node_allocatable: pods
+kubelet_system_reserved: cpu=0.25,memory=200Mi
+kubelet_kube_reserved: cpu=0.25,memory=1500Mi
+kubelet_eviction_hard: 'memory.available<300Mi' #,nodefs.available<10%,imagefs.available<15%,nodefs.inodesFree<5%'
+kubelet_eviction_soft: 'memory.available<500Mi' #,nodefs.available<50%,imagefs.available<50%,nodefs.inodesFree<10%'
+kubelet_eviction_soft_grace_period: memory.available=1m30s
+kubelet_eviction_max_pod_grace_period: 30
+kubelet_eviction_pressure_transition_period: 30s
+kubelet_node_status_update_frequency: 10s
+kubelet_global_housekeeping_interval: 1m0s
+kubelet_housekeeping_interval: 10s
+kubelet_runtime_request_timeout: 2m0s
+kubelet_volume_stats_agg_period: 1m0s
+
+## kubeproxy
+# 默认使用iptables进行数据转发，如果要启用ipvs，则此处设置为`ipvs`
+kubeproxy_proxy_mode: ""
+kubeproxy_kube_api_burst: 20
+kubeproxy_kube_api_qps: 10
+kubeproxy_log_level: 1
+
+## scheduler
+scheduler_log_level: 1
+
+## dns相关参数(true或者false)
+dns_on: true
+dns_provider: coredns # coredns/kube-dns
+dns_upstream_nameservers: 114.114.114.114,1.2.4.8
+
+## Metrics Server(true或者false)
+metrics_server_on: true

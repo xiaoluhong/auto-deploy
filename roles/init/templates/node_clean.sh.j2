@@ -1,0 +1,116 @@
+#!/bin/bash
+
+# 停止服务
+svc_list='
+kubelet.service
+kube-scheduler.service
+kube-proxy.service
+kube-apiserver.service
+kube-controller-manager.service'
+
+for svc in $svc_list;
+do
+  svc_stats=$( systemctl is-active ${svc} )
+  if [ ${svc_stats} == 'active' ]; then
+    systemctl stop ${svc};
+    systemctl disable ${svc};
+  fi
+done
+
+if [ `systemctl is-active docker` == 'active' ]; then
+  if [[ -n `docker volume ls | grep -v DRIVER` ]]; then
+     # 删除所有容器卷
+    docker volume rm $(docker volume ls -q)
+  fi
+  if [[ -n `docker ps -a | grep -v CONTAINER` ]]; then
+    # 删除所有容器
+    docker rm -f $(docker ps -qa)
+  fi
+fi
+
+# 卸载mount目录
+for mount in $(mount | grep tmpfs | grep '/var/lib/kubelet' | awk '{ print $3 }') /var/lib/kubelet /var/lib/rancher;
+do
+  umount $mount;
+done
+
+# 备份目录
+if [ -d /etc/kubernetes ]; then
+  mv /etc/kubernetes /etc/kubernetes-bak-$(date +"%Y%m%d%H%M")
+fi
+if [ -d /var/lib/etcd ]; then
+  mv /var/lib/etcd /var/lib/etcd-bak-$(date +"%Y%m%d%H%M")
+fi
+if [ -d /var/lib/rancher ];then
+  mv /var/lib/rancher /var/lib/rancher-bak-$(date +"%Y%m%d%H%M")
+fi
+if [ -d /opt/rke ]; then
+mv /opt/rke /opt/rke-bak-$(date +"%Y%m%d%H%M")
+fi
+
+# 删除残留路径
+rm -rf /etc/ceph \
+     /etc/cni \
+     /opt/cni \
+     /run/secrets/kubernetes.io \
+     /run/calico \
+     /run/flannel \
+     /var/lib/calico \
+     /var/lib/cni \
+     /var/lib/kubelet \
+     /var/log/containers \
+     /var/log/pods \
+     /var/run/calico
+
+# 清理网络接口
+no_del_net_inter='
+lo
+docker0
+eth
+ens
+bond
+'
+network_interface=`ls /sys/class/net`
+for net_inter in $network_interface;
+do
+  if ! echo "${no_del_net_inter}" | grep -qE ${net_inter:0:3}; then
+    ip link delete $net_inter
+  fi
+done
+
+# 清理残留进程
+port_list='
+80
+443
+6443
+2376
+2379
+2380
+8472
+9099
+10250
+10254
+'
+for port in $port_list;
+do
+  pid=`netstat -atlnup | grep $port | awk '{print $7}' | awk -F '/' '{print $1}' | grep -v - | sort -rnk2 | uniq`
+  if [[ -n $pid ]];then
+    kill -9 $pid
+  fi
+done
+kube_pid=`ps -ef | grep -v grep | grep kube | awk '{print $2}'`
+if [[ -n $kube_pid ]];then
+  kill -9 $kube_pid
+fi
+
+{% if iptables_clean|bool == true %}
+# 清理Iptables表
+## 注意：如果节点Iptables有特殊配置，以下命令请谨慎操作
+sudo iptables --flush
+sudo iptables --flush --table nat
+sudo iptables --flush --table filter
+sudo iptables --table nat --delete-chain
+sudo iptables --table filter --delete-chain
+systemctl reload docker;
+systemctl restart docker
+{% endif %}

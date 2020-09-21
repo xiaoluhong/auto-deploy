@@ -1,0 +1,125 @@
+---
+- name: 拷贝模块加载脚本到节点
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - { src: '/etc/ansible/roles/init/templates/load-mod.sh.j2', dest: '/etc/profile.d/load-mod.sh' }
+  tags: [ rancher-k8s-install,k8s-reinstall,node-init,docker-init,node-clean ]
+  when: node_init|bool == true or docker_init|bool == true or node_clean|bool == true
+
+- name: 拷贝节点清理脚本到节点
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - { src: '/etc/ansible/roles/init/templates/node_clean.sh.j2', dest: '/tmp/node_clean.sh' }
+  tags: [ rancher-k8s-install,k8s-reinstall,node-init,docker-init,node-clean ]
+  when: node_init|bool == true or docker_init|bool == true or node_clean|bool == true
+
+- name: 拷贝节点配置初始化脚本到节点
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - { src: '/etc/ansible/roles/init/templates/node_init.sh.j2', dest: '/tmp/node_init.sh' }
+  tags: [ rancher-k8s-install,k8s-reinstall,node-init,docker-init,node-clean ]
+  when: node_init|bool == true or docker_init|bool == true or node_clean|bool == true
+
+- name: 拷贝Docker配置初始化脚本到节点
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - { src: '/etc/ansible/roles/init/templates/docker_init.sh.j2', dest: '/tmp/docker_init.sh' }
+  tags: [ rancher-k8s-install,k8s-reinstall,node-init,docker-init,node-clean ]
+  when: node_init|bool == true or docker_init|bool == true or node_clean|bool == true
+
+- name: adjust default sysctl values
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  with_items:
+    # enable reverse path filter (prevent some spoofing attacks)
+    - { name: net.ipv4.conf.all.rp_filter, value: 0 }
+    - { name: net.ipv4.conf.default.rp_filter, value: 0 }
+    # enable TCP/IP SYN cookies (prevent SYN flood attack)
+    - { name: net.ipv4.tcp_syncookies, value: 1 }
+    # enable IP forwarding
+    - { name: net.ipv4.ip_forward, value: 1 }
+    - { name: net.ipv6.conf.all.forwarding, value: 1 }
+    - { name: net.bridge.bridge-nf-call-iptables, value: 1 }
+    - { name: net.bridge.bridge-nf-call-ip6tables, value: 1 }
+    - { name: fs.inotify.max_user_watches, value: 1048576 }
+  tags: [ rancher-k8s-install,k8s-reinstall,node-init ]
+  when: node_init|bool == true
+
+- name: 禁止 SELinux
+  selinux:
+    state: disabled
+  tags: [ rancher-k8s-install,k8s-reinstall,node-init ]
+  when: node_init|bool == true and ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+
+- name: Node 配置初始化
+  shell: 'bash {{ item }}'
+  with_items:
+    - '/tmp/node_init.sh'
+  tags: [ rancher-k8s-install,k8s-reinstall,node-init ]
+  when: node_init|bool == true
+
+- name: 加载系统内核模块
+  shell: 'bash {{ item }}'
+  with_items:
+    - '/etc/profile.d/load-mod.sh'
+  tags: [ rancher-k8s-install,k8s-reinstall,node-init ]
+  when: node_init|bool == true
+
+- name: Docker 配置初始化
+  shell: 'bash {{ item }}'
+  with_items:
+    - '/tmp/docker_init.sh'
+  tags: [ rancher-k8s-install,k8s-reinstall,docker-init ]
+  when: docker_init|bool == true
+
+- name: Node 残留清理
+  shell: 'bash {{ item }}'
+  with_items:
+    - '/tmp/node_clean.sh'
+  tags: [ rancher-k8s-install,k8s-reinstall,node-clean ]
+  when: node_clean|bool == true
+
+- name: 拷贝Kubectl到节点
+  copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: preserve
+  with_items:
+    - { src: '/usr/local/bin/kubectl', dest: '/usr/local/bin/kubectl' }
+  tags: [ rancher-k8s-install,k8s-reinstall,copy-kubectl ]
+
+### 分发镜像
+#- name: 拷贝Haproxy镜像
+#  copy: " src=/etc/ansible/roles/init/images/haproxy.tgz dest=/tmp/haproxy.tgz "
+#  when: lb == 'true'
+#
+#- name: 导入Haproxy镜像
+#  shell: " sudo gunzip -c /tmp/haproxy.tgz | docker load "
+#  when: lb == 'true'
+#
+#- name: 拷贝Tiller镜像
+#  copy: " src=/etc/ansible/roles/init/images/tiller.tgz dest=/tmp/tiller.tgz "
+#  when: role is defined
+#
+#- name: 导入Tiller镜像
+#  shell: " sudo gunzip -c /tmp/tiller.tgz | docker load "
+#  when: role is defined
+#
+#- name: 拷贝Keepalived镜像
+#  copy: " src=/etc/ansible/roles/init/images/keepalived.tgz dest=/tmp/keepalived.tgz "
+#  when: lb == 'true'
+#
+#- name: 导入Keepalived镜像
+#  shell: " sudo gunzip -c /tmp/keepalived.tgz | docker load "
+#  when: lb == 'true'

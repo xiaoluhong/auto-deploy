@@ -1,0 +1,15 @@
+# rancher 创建导入集群并获取导入命令
+- hosts: 127.0.0.1
+  vars_files:
+    - /etc/ansible/config/all.yaml
+  gather_facts: false
+  roles:
+  - { role: 'import-k8s-cfg' }
+
+# 导入k8s集群
+- hosts: 127.0.0.1
+  vars_files:
+    - /etc/ansible/config/all.yaml
+  gather_facts: false
+  roles:
+  - { role: 'import-k8s' }

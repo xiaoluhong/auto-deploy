@@ -1,0 +1,20 @@
+---
+
+- name: 检查 import-k8s 工作目录是否存在，如果存在则跳过
+  file:
+    path: /etc/ansible/cluster/import-k8s/{{ host_groups }}/
+    state: directory
+
+# 获取注册token
+
+- name: 生成 import-k8s 执行脚本
+  template:
+    src: /etc/ansible/roles/import-k8s/templates/import.yml.j2
+    dest: /etc/ansible/cluster/import-k8s/{{ host_groups }}/rke/cluster.yml
+
+- name: 安装或升级 {{ host_groups }} k8s 集群 - 使用自定义的 rke 版本
+  shell: "cd /etc/ansible/cluster/import-k8s/{{ host_groups }}/rke; /etc/ansible/bin/{{ rke_version }} {{ rke_arg }} --config cluster.yml"
+  tags: [ rancher-k8s-install,k8s-install,k8s-update,never ]
+  when: rke_version is defined and rke_version|length > 0
+
+

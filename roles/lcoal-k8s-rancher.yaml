@@ -1,0 +1,59 @@
+---
+- hosts: "127.0.0.1"
+- hosts: "all"
+
+## 初始化节点
+- hosts: "{{ host_groups }}"
+  vars_files:
+    - /etc/ansible/config/all.yaml
+  gather_facts: false
+  roles:
+  - { role: 'init' }
+
+## 生成ssh认证key
+- hosts: 127.0.0.1
+  vars_files:
+    - /etc/ansible/config/all.yaml
+  gather_facts: false
+  roles:
+  - { role: 'ssh-key' }
+
+# 创建rke工作用户
+- hosts: "{{ host_groups }}"
+  vars_files:
+    - /etc/ansible/config/all.yaml
+  gather_facts: false
+  roles:
+  - { role: 'rke-user' }
+
+# 创建ssl证书
+- hosts: 127.0.0.1
+  vars_files:
+    - /etc/ansible/config/all.yaml
+  gather_facts: false
+  roles:
+  - { role: 'certs', when: ssl_certs_type|bool == 1 }
+
+# 安装rke k8s集群
+- hosts: 127.0.0.1
+  vars_files:
+    - /etc/ansible/config/all.yaml
+  gather_facts: false
+  roles:
+  - { role: 'rke-k8s' }
+
+# 安装、升级、重新安装Rancher HA
+- hosts: 127.0.0.1
+  vars_files:
+    - /etc/ansible/config/all.yaml
+  gather_facts: false
+  roles:
+  - { role: 'rancher' }
+
+# 节点配置kubectl
+- hosts: "{{ host_groups }}"
+  vars_files:
+    - /etc/ansible/config/all.yaml
+  gather_facts: false
+  roles:
+  - { role: 'kubectl' }

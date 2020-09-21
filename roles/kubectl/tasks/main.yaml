@@ -1,0 +1,23 @@
+---
+- name: 创建kubectl配置目录，如果存在则跳过
+  file:
+    path: ~/.kube/
+    state: directory
+  tags: [ rancher-k8s-install,k8s-install,k8s-update,k8s-reinstall,copy-kubecfg,never ]
+
+- name: 检查 kubecfg 文件是否生成
+  stat:
+    path: /etc/ansible/cluster/{{ host_groups }}/rke/kube_config_cluster.yml
+  tags: [ rancher-k8s-install,k8s-install,k8s-update,k8s-reinstall,copy-kubecfg,never ]
+
+- name: 拷贝 kubecfg 文件到 {{ host_groups }} 集群的所有节点
+  copy:
+      src: "{{ item.src }}"
+      dest: "{{ item.dest }}"
+  with_items:
+    - { src: '/etc/ansible/cluster/{{ host_groups }}/rke/kube_config_cluster.yml', dest: '~/.kube/config'}
+  tags: [ rancher-k8s-install,k8s-install,k8s-update,k8s-reinstall,copy-kubecfg,never ]
+
+- name: 配置 kubectl 自动补全
+  shell: " if ! cat /etc/profile | grep -qE '(kubectl.*completion.*bash)'; then echo 'source <(kubectl completion bash)' >> /etc/profile; fi "
+  tags: [ rancher-k8s-install,k8s-install,k8s-update,k8s-reinstall,copy-kubecfg,never ]

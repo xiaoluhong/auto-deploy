@@ -1,0 +1,50 @@
+---
+- name: 检查Rancher工作目录是否存在
+  stat:
+    path: /etc/ansible/cluster/{{ host_groups }}/rancher
+  register: stat_result
+  tags: [ rancher-k8s-install,rancher-install,rancher-update,rancher-install-cfg,rancher-update-cfg,never ]
+
+- name: 创建Rancher工作目录，如果存在则跳过
+  file:
+      path: "/etc/ansible/cluster/{{ host_groups }}/rancher"
+      state: directory
+  tags: [ rancher-k8s-install,rancher-install,rancher-update,rancher-install-cfg,rancher-update-cfg,never ]
+  when: stat_result.stat.exists == False
+
+## Rancher HA 安装
+- name: 更新Rancher HA 安装脚本
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - {src: '/etc/ansible/roles/rancher/templates/rancher-install.sh.j2', dest: "/etc/ansible/cluster/{{ host_groups }}/rancher/rancher-install.sh"}
+  tags: [ rancher-k8s-install,rancher-install,rancher-install-cfg,never ]
+
+- name: 安装Rancher HA
+  shell: "cd /etc/ansible/cluster/{{ host_groups }}; bash ./rancher/rancher-install.sh"
+  tags: [ rancher-k8s-install,rancher-install,never ]
+  register: install_out
+- debug: var=install_out.stdout_lines
+
+## Rancher HA 升级
+- name: 更新Rancher HA 升级脚本
+  template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+  with_items:
+    - {src: '/etc/ansible/roles/rancher/templates/rancher-update.sh.j2' , dest: "/etc/ansible/cluster/{{ host_groups }}/rancher/rancher-update.sh"}
+  tags: [ rancher-update,rancher-update-cfg,never ]
+
+- name: 升级Rancher HA
+  shell: "cd /etc/ansible/cluster/{{ host_groups }}; bash ./rancher/rancher-update.sh"
+  tags: [ rancher-update,never ]
+  register: update_out
+- debug: var=update_out.stdout_lines
+
+### Rancher HA 卸载
+#- name: 卸载Rancher HA
+#  shell: "/etc/ansible/cluster/{{ host_groups }}/rke/kube_config_cluster.yml "
+#  tags: [ rancher-uninstall,never ]
+#  register: uninstall_out
+#- debug: var=uninstall_out.stdout_lines

@@ -1,0 +1,13 @@
+#!/bin/bash
+
+ROLES=` echo {{ role }} | sed 's/,/ /g' `
+
+ROLE=''
+
+for role in $ROLES;
+do
+    ROLE="$ROLE --$role "
+
+done
+
+{{ node_register_command.stdout }} $ROLE

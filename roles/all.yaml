@@ -1,0 +1,96 @@
+---
+- hosts: "127.0.0.1"
+- hosts: "all"
+
+## 初始化节点
+- hosts: "{{ host_groups }}"
+  vars_files:
+    - /etc/ansible/config/all.yaml
+  gather_facts: false
+  roles:
+  - { role: 'init', when: cluster_type == rke or cluster_type == custom or cluster_type == local }
+
+## 生成ssh认证key
+- hosts: 127.0.0.1
+  vars_files:
+    - /etc/ansible/config/all.yaml
+  gather_facts: false
+  roles:
+  - { role: 'ssh-key', when: cluster_type == rke or cluster_type == custom or cluster_type == local }
+
+# 创建rke工作用户
+- hosts: "{{ host_groups }}"
+  vars_files:
+    - /etc/ansible/config/all.yaml
+  gather_facts: false
+  roles:
+  - { role: 'rke-user', when: cluster_type == rke or cluster_type == custom or cluster_type == local }
+
+# 创建ssl证书
+- hosts: 127.0.0.1
+  vars_files:
+    - /etc/ansible/config/all.yaml
+  gather_facts: false
+  roles:
+  - { role: 'certs', when: ssl_certs_type|bool == 1 and cluster_type == local }
+
+# 安装rke k8s集群
+- hosts: 127.0.0.1
+  vars_files:
+    - /etc/ansible/config/all.yaml
+  gather_facts: false
+  roles:
+  - { role: 'rke-k8s', when: cluster_type == rke or cluster_type == local }
+
+# 安装、升级、重新安装Rancher HA
+- hosts: 127.0.0.1
+  vars_files:
+    - /etc/ansible/config/all.yaml
+  gather_facts: false
+  roles:
+  - { role: 'rancher' }
+
+# 节点配置kubectl
+- hosts: "{{ host_groups }}"
+  vars_files:
+    - /etc/ansible/config/all.yaml
+  gather_facts: false
+  roles:
+  - { role: 'kubectl' }
+
+# rancher 创建自定义集群并获取节点注册命令
+- hosts: 127.0.0.1
+  vars_files:
+    - /etc/ansible/config/all.yaml
+  gather_facts: false
+  roles:
+  - { role: 'custom-k8s-cfg' }
+
+# custom k8s 集群安装或升级
+- hosts: "{{ host_groups }}"
+  vars_files:
+    - /etc/ansible/config/all.yaml
+  gather_facts: false
+  roles:
+  - { role: 'custom-k8s' }
+
+# 安装import k8s集群
+- hosts: 127.0.0.1
+  vars_files:
+    - /etc/ansible/config/all.yaml
+  gather_facts: false
+  roles:
+  - { role: 'import-k8s' }
+
+# todo
+# 安装Haproxy
+#- hosts: "{{ host_groups }}"
+#  gather_facts: true
+#  roles:
+#  - { role: 'haproxy' }
+
+# 安装Keepalived
+#- hosts: "{{ host_groups }}"
+#  gather_facts: true
+#  roles:
+#  - { role: 'keepalived' }

@@ -1,0 +1,36 @@
+#!/bin/bash
+{% if rancher_access_type == url %}
+rancher_api_url='https://{{ rancher_url }}'
+{% else %}
+rancher_api_url='https://{{ rancher_extend_ip }}:{{ nodeport_https }}'
+{% endif %}
+rancher_api_key='{{ import_rancher_api_key }}'
+cluster_name='{{ host_groups }}'
+
+create_cluster_data()
+{
+  cat <<EOF
+{
+    "aliyunEngineConfig": null,
+    "amazonElasticContainerServiceConfig": null,
+    "answers": null,
+    "azureKubernetesServiceConfig": null,
+    "baiduEngineConfig": null,
+    "dockerRootDir": "/var/lib/docker",
+    "enableClusterAlerting": true,
+    "enableClusterMonitoring": true,
+    "googleKubernetesEngineConfig": null,
+    "huaweiEngineConfig": null,
+    "localClusterAuthEndpoint": null,
+    "name": "{{ host_groups }}",
+    "rancherKubernetesEngineConfig": null,
+    "tencentEngineConfig": null,
+    "windowsPreferedCluster": false
+}
+EOF
+}
+
+curl -k -X POST \
+    -H "Authorization: Bearer ${rancher_api_key}" \
+    -H "Content-Type: application/json" \
+    -d "$(create_cluster_data)" ${rancher_api_url}/v3/clusters

@@ -1,0 +1,58 @@
+---
+- name: 检查 {{ host_groups }} 集群目录是否存在
+  stat:
+    path: /etc/ansible/cluster/custom-k8s/{{ host_groups }}/
+  register: custom_k8s_dir_stat_result
+  tags: [ rancher-k8s-install,k8s-install,k8s-update,k8s-reinstall,custom-k8s-cfg ]
+
+- name: 检查 {{ host_groups }} 集群目录是否存在，如果存在则跳过
+  file:
+    path: /etc/ansible/cluster/custom-k8s/{{ host_groups }}/
+    state: directory
+  when: custom_k8s_dir_stat_result.stat.exists == False
+  tags: [ rancher-k8s-install,k8s-install,k8s-update,k8s-reinstall,custom-k8s-cfg ]
+
+- name: 获取 local 集群 agent token
+  shell: " kubectl --kubeconfig=/etc/ansible/cluster/rke-k8s/local/rke/kube_config_cluster.yml get tokens.management.cattle.io `kubectl --kubeconfig=/etc/ansible/cluster/rke-k8s/local/rke/kube_config_cluster.yml get tokens.management.cattle.io | grep agent | awk '{print $1}'` -ogo-template='{{.token}}' "
+  register: local_agent_token
+  tags: [ rancher-k8s-install,k8s-install,k8s-update,custom-k8s-cfg ]
+  when: custom_k8s_dir_stat_result.stat.exists == False and (custom_rancher_api_key is defined and custom_rancher_api_key|length == 0) or custom_rancher_api_key is not defined
+- name: 获取 local 集群 agent token debug
+  debug:
+    msg: "{{ local_agent_token.stdout }}"
+  tags: [ rancher-k8s-install,k8s-install,k8s-update,custom-k8s-cfg ]
+  when: custom_k8s_dir_stat_result.stat.exists == False and (custom_rancher_api_key is defined and custom_rancher_api_key|length == 0) or custom_rancher_api_key is not defined
+
+- name: 生成创建集群脚本
+  template:
+    src: /etc/ansible/roles/custom-k8s-cfg/templates/custom.sh.j2
+    dest: /etc/ansible/cluster/custom-k8s/{{ host_groups }}/custom.sh
+  tags: [ rancher-k8s-install,k8s-install,k8s-update,k8s-reinstall,custom-k8s-cfg ]
+  when: custom_k8s_dir_stat_result.stat.exists == False
+
+- name: 创建自定义集群 {{ host_groups }}
+  shell: "bash /etc/ansible/cluster/custom-k8s/{{ host_groups }}/custom.sh"
+  tags: [ rancher-k8s-install,k8s-install,k8s-update,custom-k8s-cfg ]
+  when: custom_k8s_dir_stat_result.stat.exists == False
+  register: custom_k8s_create
+- name: 创建自定义集群 {{ host_groups }} debug
+  debug:
+    msg: "{{custom_k8s_create.stdout}}"
+  tags: [ rancher-k8s-install,k8s-install,k8s-update,custom-k8s-cfg ]
+
+- name: 生成获取节点注册命令脚本
+  template:
+    src: /etc/ansible/roles/custom-k8s-cfg/templates/node-register-command.sh.j2
+    dest: /etc/ansible/cluster/custom-k8s/{{ host_groups }}/node-register-command.sh
+  tags: [ rancher-k8s-install,k8s-install,k8s-update,k8s-reinstall,custom-k8s-cfg ]
+  when: custom_k8s_dir_stat_result.stat.exists == False
+
+- name: 获取节点注册命令
+  shell: " bash /etc/ansible/cluster/custom-k8s/{{ host_groups }}/node-register-command.sh "
+  register: node_register_command
+  tags: [ rancher-k8s-install,k8s-install,k8s-update,custom-k8s-cfg ]
+  when: custom_k8s_dir_stat_result.stat.exists == False
+- name: 获取节点注册命令 debug
+  debug:
+    msg: "{{node_register_command.stdout}}"
+  tags: [ rancher-k8s-install,k8s-install,k8s-update,custom-k8s-cfg ]
